@@ -36,8 +36,7 @@ h3 { font-size: 13px; margin: 18px 0 8px; color: var(--text-2); text-transform: 
   background: var(--panel); display: flex; flex-direction: column; gap: 18px; }
 .brand { display: flex; gap: 10px; align-items: center; padding: 4px 8px; color: var(--text); }
 .brand:hover { text-decoration: none; }
-.brand-mark { width: 30px; height: 30px; border-radius: 8px; background: linear-gradient(135deg, #6366f1, #8b5cf6);
-  color: white; display: grid; place-items: center; font-weight: 700; font-size: 12px; letter-spacing: .02em; }
+.brand-mark { width: 34px; height: 34px; flex: none; display: block; }
 .brand strong { display: block; font-size: 14px; } .brand small { color: var(--text-3); font-size: 11.5px; }
 nav { display: flex; flex-direction: column; gap: 2px; }
 .nav-item { padding: 7px 10px; border-radius: 7px; color: var(--text-2); font-weight: 500; }

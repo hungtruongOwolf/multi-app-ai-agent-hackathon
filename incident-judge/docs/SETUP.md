@@ -11,8 +11,11 @@ SENTRY_ORG=...  SENTRY_TOKEN=...
 LINEAR_API_KEY=...
 INSTATUS_API_KEY=...         # INSTATUS_PAGE_ID is discovered by bootstrap
 SLACK_BOT_TOKEN=xoxb-...
+SLACK_APP_TOKEN=xapp-...          # Socket Mode: approval buttons without a public URL
 ONCALL_SLACK_USER_IDS=U0123ABCD   # who may approve fixes / public posts
 INSTATUS_SHOULD_PUBLISH=false     # true only when recording the demo
+PAGERDUTY_ROUTING_KEY=...         # optional: escalation
+GITHUB_TOKEN=...  GITHUB_REPO=owner/repo   # optional: runbook updates as pull requests
 ```
 
 Then:
@@ -21,7 +24,7 @@ Then:
 uv run judge bootstrap     # creates/discovers: Sentry projects + DSNs, Linear team + ij-eval label,
                            # Instatus page + components, Slack #incident-judge-oncall; writes ids to .env
 uv run judge doctor        # per app: auth → one write → read back → clean up
-uv run judge dev           # ShopLab sends real errors to Sentry; agent acts on Linear / Instatus / Slack
+uv run judge dev           # ShopLab sends real errors to Sentry; agent acts on Linear / Instatus / Slack / PagerDuty / GitHub
 ```
 
 ---
@@ -55,7 +58,7 @@ Trap: the free plan caps active issues (250). Eval trials label their issues `ij
 Trap: Instatus publishes incidents immediately. Keep `INSTATUS_SHOULD_PUBLISH=false` while developing.
 UNKNOWN: whether the incidents API is available on the free plan — `judge doctor` will tell you.
 
-## 4. Slack (war room + approvals)
+## 4. Slack (incident thread + approvals)
 
 1. Create a workspace you own (company workspaces may require app approval).
 2. https://api.slack.com/apps → **Create New App** → From scratch.
@@ -63,10 +66,13 @@ UNKNOWN: whether the incidents API is available on the free plan — `judge doct
    `channels:manage`, `channels:join`, `users:read`. Install to workspace → copy the **Bot User OAuth Token**
    (`xoxb-…`) → `SLACK_BOT_TOKEN`.
 4. Your member ID (profile → ⋯ → Copy member ID) → `ONCALL_SLACK_USER_IDS` (comma-separated for several people).
-5. `judge bootstrap` creates/joins `#incident-judge-oncall` and writes `SLACK_ONCALL_CHANNEL`.
+5. **Socket Mode** (Settings → Socket Mode → enable) → create an app-level token with `connections:write` →
+   `SLACK_APP_TOKEN`. Turn on Interactivity & Shortcuts. The approval buttons then work with no public URL.
+6. `judge bootstrap` creates/joins `#incident-judge-oncall`, invites the on-call users and writes `SLACK_ONCALL_CHANNEL`.
+7. Optional: Basic Information → Display Information → upload `assets/brand/png/app-icon-512.png` as the app icon.
 
-Approvals are buttons on one card per incident (Socket Mode: add an app-level token with `connections:write` →
-`SLACK_APP_TOKEN`); typed `approve <hash8>` / `reject <hash8>` replies still work as a fallback. No public URL needed.
+Everything for one incident happens in one thread of that channel. Approvals are buttons on one card per incident;
+typed `approve <hash8>` / `reject <hash8>` replies still work as a fallback.
 
 ## 5. PagerDuty (escalation, optional)
 

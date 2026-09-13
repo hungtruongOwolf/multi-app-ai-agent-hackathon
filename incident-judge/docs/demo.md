@@ -1,30 +1,45 @@
-# Two-minute demo — running for real on a local machine
+# Two-minute demo
 
-Preparation (before recording):
+The demo runs on the **real apps**: Sentry, Linear, Instatus, Slack, PagerDuty and GitHub. ShopLab breaks for real on
+the local machine.
 
-```bash
-uv run judge dev --time-scale 0.2          # sandbox + ShopLab + agent, runbooks seeded at L1
-```
-
-Keep three windows open: **Slack UI** http://127.0.0.1:8900/slack/ui · **Status page**
-http://127.0.0.1:8900/status/page_shoplab · a terminal for injecting faults and running
-`uv run judge decisions --trial-id demo`.
-
-Handy variables:
+## Preparation
 
 ```bash
-F='curl -s -X POST http://127.0.0.1:8800/faults -H "X-Control-Token: dev-control-token" -H "Content-Type: application/json" -d'
-CLEAR='curl -s -X DELETE http://127.0.0.1:8800/faults -H "X-Control-Token: dev-control-token"'
+cd incident-judge
+uv run judge doctor                          # every app green
+uv run judge dev --trial-id demo-final       # ShopLab + console + agent on the real apps (runbooks seeded from knowledge/)
 ```
 
-| Time | Do | Say |
+Set `INSTATUS_SHOULD_PUBLISH=true` in `.env` for the recording only.
+
+Arrange the screen:
+
+| Window | URL |
+|---|---|
+| Slack | `#incident-judge-oncall` |
+| ShopLab control room | http://127.0.0.1:8800/ops |
+| Store | http://127.0.0.1:8800 |
+| Console | http://127.0.0.1:8700 |
+| Tabs | Status page (`INSTATUS_PAGE_URL`), Linear "My issues", the GitHub repository's Pull requests |
+
+## Script
+
+| Time | Show | Say |
 |---|---|---|
-| 0:00–0:15 | Empty Slack UI | "On-call at 3 a.m. has to answer four questions alone: how severe, can customers see it, is it a duplicate, how did we fix it last time. Existing tools do the plumbing; we do the judgment and the learning." |
-| 0:15–0:45 | `$F '{"fault":"pool_starved","service":"checkout"}'` → Slack: SEV1 triage, war room, **[IJ-PUBLIC]** and **[IJ-FIX]** cards (runbook `db-pool-starved`, L1, 3/3 successes) → click **Approve as U_ONCALL_1** on both | "A real failure on ShopLab. The agent finds the runbook, but this runbook's self-fix right is only L1 — a human has to click." |
-| 0:45–1:05 | ":wrench: Executing scale_pool" → "Verify PASS" → status page moves to MONITORING → after the quiet window: RESOLVED; `judge memory proposals` shows a proposal updating the runbook | "Verified on SLOs, not on 'Sentry went quiet'. If it fails, it rolls back on its own. The experience goes back into the wiki through a human-reviewed proposal — success counts are computed by code, the LLM cannot edit them." |
-| 1:05–1:25 | `$CLEAR`; `$F '{"fault":"slow_query","service":"checkout"}'` → Slack: "Runbook db-pool-starved looks similar but its machine-checked conditions do NOT match (db_query_p95 …)" | "It looks exactly like last time. A guessing agent would press the wrong fix. The runbook carries discriminators; code measures them and refuses — P7." |
-| 1:25–1:40 | `$F '{"fault":"staging_fire"}'` → Slack ":no_entry: Blocked public status page post — P1: environment=staging". Then `$F '{"fault":"injection","service":"checkout"}'` → nothing is resolved or restarted | "The word CRITICAL doesn't lead it. Neither does a prompt injection inside the error message — because none of the guardrails live in the prompt." |
-| 1:40–1:55 | Open `var/reports/<run>/report.html`: 30 scenarios × 3, pass^3, unsafe, mixed; baseline B0 next to it | "Graded on the real state of the apps, invariants over the audit log, and canaries." |
-| 1:55–2:00 | — | "The LLM proposes, code decides. Automation rights are earned through a track record — and lost the moment a fix fails." |
+| 0:00–0:12 | Store, then Slack (quiet) | "At 3 a.m. on-call has to answer four questions alone: how bad is it, can customers see it, is it one incident or several, and have we fixed this before? Incident Judge answers them, and acts only within limits enforced by code." |
+| 0:12–0:30 | Control room → inject **bad_flag** on checkout. Store: payment fails. Slack: triage message appears | "Checkout breaks for real. The agent waits for the signal to settle, then judges: SEV1, customers affected. The cause: the `payment_v2` flag, flipped by release-bot 35 seconds before the first error. It opened one Linear ticket and assigned it to me." |
+| 0:30–0:48 | Slack approval card: status-page post + fix, exact change, why, verify, rollback → click **Approve all** | "One card for everything that needs a human. The exact change, why it fixes the cause, how it will be verified and how it rolls back. This runbook has earned L1, so it needs one click." |
+| 0:48–1:05 | Progress message updating: error rate 100% → 0%. Status page: Investigating → Monitoring | "It verifies on live traffic, not on Sentry going quiet. If the SLO doesn't recover, the change is rolled back, the runbook is demoted and PagerDuty pages on-call." |
+| 1:05–1:20 | Slack report → Linear ticket Done → status page Resolved → console incident page (timeline, verification chart, audit) | "It resolves only after a quiet window with healthy SLOs. Every decision and the rule behind it is in the audit log." |
+| 1:20–1:35 | GitHub pull request "Update runbook …" against `knowledge/` → click **Merge** on the Slack card | "Then it learns. Code writes the timeline and recomputes the runbook's track record, and the LLM can't touch those numbers. Its runbook update arrives as a pull request a human merges." |
+| 1:35–1:50 | Inject **slow_query**. Slack: "looks like `db-pool-starved`, but its conditions do not hold (query p95 …)" | "This one looks identical in Sentry. A guessing agent would apply the same fix. The runbook's conditions are measured by code, so the agent refuses and diagnoses instead." |
+| 1:50–2:00 | README results table: 30/30, 0 unsafe; ablation row | "Thirty scenarios, three trials each, graded on the real state of the apps: zero unsafe. The LLM proposes. Code decides." |
 
-Record the real screen with voice-over. If a step is slow, a smaller `TIME_SCALE` shortens the windows.
+## Tips
+
+- Clear faults between takes: `curl -X DELETE http://127.0.0.1:8800/faults -H "X-Control-Token: dev-control-token"`.
+- A new `--trial-id` gives a clean agent state; delete earlier Linear tickets and status-page incidents before the
+  final take.
+- To show escalation, leave an approval card unanswered: PagerDuty is paged when the approval window
+  (10 minutes on the real apps) expires.

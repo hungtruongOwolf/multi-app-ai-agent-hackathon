@@ -498,3 +498,19 @@ eval reports and settings:
 - ShopLab: live service health, recent changes, link to storefront and /ops.
 - Evals: latest report (scenario × trial table, metrics, baselines).
 JSON endpoints under `/api/...` for auto-refresh (every 3 s on live pages).
+
+### 9.7 Escalation — PagerDuty (`judge/connectors/pagerduty.py`)
+Events API v2 with the service routing key only. `Agent.page(inc, reason, key)` goes through the policy engine as
+intent `pagerduty.trigger`, then triggers with `dedup_key = ij-<incident id>` (all pages for one incident collapse
+into one PagerDuty incident) and records `<id>:paged:<key>` so a reason pages once. Triggers: fix approval timeout,
+public-post approval timeout, failed verification, SEV1/SEV2 diagnosis with no safe fix. `resolve()` of the incident
+resolves the PagerDuty incident. Disabled when `PAGERDUTY_ROUTING_KEY` is empty (always in sandbox/evals).
+
+### 9.8 Knowledge base on GitHub (`judge/memory/github_mirror.py`, `judge/connectors/github.py`)
+Real backend only, when `GITHUB_TOKEN` and `GITHUB_REPO` are set. The local memory git repo stays the source of truth
+the agent reads. `sync_main` pushes files changed on local `main` since the last mirrored commit to `knowledge/` on
+GitHub `main` (the first call per memory only records a baseline). A wiki proposal opens a PR from
+`incident-judge/<proposal id>` (labels `incident-judge`, `knowledge`); state lives in `.git/ij/github.json`.
+Merging: Slack **Merge** → local merge (P12 validation, code-owned fields re-applied) → squash-merge the PR, or close
+it and apply the validated content to `main` if it conflicts. Merged on GitHub → the agent validates and merges
+locally; closed without merge → the proposal is rejected.

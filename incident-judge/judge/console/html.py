@@ -285,11 +285,11 @@ def layout(title: str, active: str, body: str, *, subtitle: str = "", refresh: s
     return f"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{e(title)} · Incident Judge</title><link rel="stylesheet" href="/static/console.css">
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><circle cx='8' cy='8' r='7' fill='%234f46e5'/></svg>">
+<link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
 </head><body>
 <div class="shell">
 <aside class="sidebar">
-  <a class="brand" href="/"><span class="brand-mark">IJ</span><span><strong>Incident Judge</strong><small>on-call console</small></span></a>
+  <a class="brand" href="/"><img class="brand-mark" src="/static/logo-mark.svg" alt="Incident Judge logo" width="34" height="34"><span><strong>Incident Judge</strong><small>on-call console</small></span></a>
   <nav>{nav}</nav>
   <div class="sidebar-foot">{context}</div>
 </aside>

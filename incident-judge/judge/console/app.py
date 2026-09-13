@@ -33,7 +33,7 @@ def create_app(settings: Settings | None = None, config: Config | None = None,
         path = STATIC / name
         if not path.is_file() or path.parent != STATIC:
             raise HTTPException(404)
-        media = "text/css" if name.endswith(".css") else "application/javascript"
+        media = {"css": "text/css", "svg": "image/svg+xml"}.get(name.rsplit(".", 1)[-1], "application/javascript")
         return Response(path.read_text(encoding="utf-8"), media_type=media, headers={"Cache-Control": "no-cache"})
 
     @app.get("/health")

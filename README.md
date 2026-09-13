@@ -1,38 +1,370 @@
-# Multi-App AI Agent Hackathon — Incident Judge
+<div align="center">
+  <img src="assets/brand/logo-mark.svg" alt="Incident Judge logo" width="96" height="96" />
 
-**Incident Judge** is an on-call agent that *judges* production incidents — how severe, whether customers can see
-it, what most likely caused it, whether we've fixed it before — and then acts across **Sentry, Linear, Instatus,
-Slack, GitHub and PagerDuty**. Known failures are fixed with autonomy the runbook has *earned* from verified
-outcomes; new failures are diagnosed from the service docs, the change log and live metrics; engineers can discuss
-and co-fix in the incident thread.
+# Incident Judge
 
-> **The LLM proposes, code decides.** The LLM maintains understanding; code holds the numbers and the permissions.
+### The LLM proposes. Code decides.
 
-## Repository layout
+**An on-call agent that judges production incidents, fixes known failures with autonomy it has earned,
+and writes down what it learned for the next engineer.**
 
-| Folder | What it is |
+It decides how severe an incident is, whether customers can see it, what most likely caused it, and whether
+the team has fixed it before. Then it acts across **Sentry, Linear, Instatus, Slack, PagerDuty and GitHub**,
+without ever letting the model hold a credential or make the final call.
+
+[Watch the 2-minute demo](#demo-video) ·
+[Reliability brief](incident-judge/docs/brief.md) ·
+[Eval report](incident-judge/docs/results/full-k3/report.md) ·
+[Setup guide](incident-judge/docs/SETUP.md)
+
+`Python 3.12` · `Claude` · `FastAPI` · `SQLite` · `Slack Socket Mode` · `LLM Wiki` · `MIT`
+
+</div>
+
+---
+
+## Submission at a glance
+
+| Requirement | Where |
 |---|---|
-| [`incident-judge/`](incident-judge/) | The agent: triage judge, policy engine, remediation + verification, approvals, diagnosis & discussion, memory (LLM Wiki), connectors, console dashboard, local API sandbox, eval harness |
-| [`shoplab/`](shoplab/) | The target system: a real shop (storefront, checkout, search, catalog, batch job), control room `/ops`, change log, fault injector |
-| [`knowledge/`](knowledge/) | The knowledge base the agent reads and improves: architecture, per-service docs (failure modes, safe actions), runbooks, incident timelines |
+| Project overview | [What Incident Judge does](#what-incident-judge-does) · [How an incident flows](#how-an-incident-flows) |
+| External apps used | [Connected apps: role and triggers](#connected-apps-role-and-triggers) |
+| Setup instructions | [Quick start (no accounts)](#quick-start-5-minutes-no-accounts) · [Connect the real apps](#connect-the-real-apps) |
+| How we tested reliability | [Reliability and evaluation](#reliability-and-evaluation) · [full brief](incident-judge/docs/brief.md) |
+| Two-minute demo | [Demo video](#demo-video) |
+| License | [MIT](LICENSE) |
 
-## Results
+**Results:** 30 scenarios × 3 independent trials, graded on the final state of the apps. **30/30 scenarios pass all
+three trials, 0 unsafe trials, 0 flaky scenarios.** 308 unit and integration tests pass.
 
-30 scenarios × 3 independent trials, graded on final app state, audit-log invariants and seeded canaries:
-**pass^3 30/30, 0 unsafe, 0 mixed**. Removing a component breaks exactly what it protects (no policy engine: 50%
-unsafe; no verification: 75% unsafe). Details: [`incident-judge/docs/brief.md`](incident-judge/docs/brief.md) ·
-reports in [`incident-judge/docs/results/`](incident-judge/docs/results/).
+---
 
-## Run it
+## Why this problem
 
-```bash
-uv sync --all-packages
-cd incident-judge && uv run judge dev     # sandbox APIs, ShopLab, console and the agent — no accounts needed
+At 3 a.m. the on-call engineer has to answer four questions alone, fast, and with partial information:
+
+1. **How bad is it?** A `CRITICAL` log line on staging matters less than eight customers who cannot pay.
+2. **Can customers see it?** If yes, the public status page must say so, but a wrong public post can't be taken back.
+3. **Is it one incident or three?** A slow database breaks checkout *and* search at once.
+4. **Have we fixed this before?** The fix is usually in someone's head, or in a runbook that no longer matches reality.
+
+Existing tools do the plumbing (alerts, tickets, pages). The *judgment* and the *learning* are still manual.
+An LLM agent is good at judgment and writing, but you cannot let it post publicly, restart production or rewrite
+its own track record because it sounded confident. Incident Judge separates the two:
+
+> **The LLM maintains understanding. Code holds the numbers and the permissions.**
+
+## What Incident Judge does
+
+| Capability | What it means in practice |
+|---|---|
+| **Judges incidents** | Severity (SEV1–SEV4), customer visibility, likely cause and duplicates, from Sentry errors, live SLO metrics and the change log. It never goes by keywords like "CRITICAL". |
+| **Acts across real apps** | One Linear ticket, one Slack thread, one status-page incident and at most one PagerDuty page per incident, even through retries, crashes and lost API responses. |
+| **Fixes known failures** | A runbook match is checked on live metrics by code before a fix is proposed. Every fix is a typed catalog action with a verification plan and a rollback. |
+| **Earns autonomy** | Each runbook has a level: L0 suggest → L1 one-click confirm → L2 runs unless vetoed → L3 automatic. The level is computed from verified outcomes, and one failed fix drops it back to L1. |
+| **Diagnoses new failures** | With no runbook, it reads the service docs, the architecture page, the change log and metrics. It then explains the most likely cause with evidence and proposes a catalog fix, or pages a human. |
+| **Discusses and co-fixes** | Engineers reply in the Slack thread: "why do you think it's the flag?", "roll back to 1.4.1 instead". It answers from evidence, and a human's fix becomes a verifiable plan card credited to them. |
+| **Learns** | After resolution, code writes the raw timeline and recomputes stats. The LLM proposes a runbook update as a **GitHub pull request** that a human merges. |
+
+## How an incident flows
+
+```mermaid
+flowchart LR
+  A[ShopLab fails<br/>real errors + metrics] --> B[Sentry issue<br/>SLO burn]
+  B --> C[Triage<br/>severity · visibility · duplicates]
+  C --> D{Known failure?<br/>runbook conditions<br/>hold on live metrics}
+  D -- yes --> E[Runbook fix<br/>earned autonomy]
+  D -- no --> F[Diagnosis from docs,<br/>change log, metrics]
+  E --> G[Policy engine<br/>P1–P15, pure code]
+  F --> G
+  G -- needs approval --> H[Slack card<br/>Approve all · Fix only · Post only · Reject]
+  G -- deny --> P[Explain in Slack<br/>page on-call]
+  H --> I[Execute catalog action]
+  I --> J{Verify SLOs<br/>on live traffic}
+  J -- recovered --> K[Resolve: Instatus · Linear · PagerDuty]
+  J -- failed --> L[Roll back · demote runbook<br/>page on-call]
+  K --> M[Timeline + stats by code<br/>runbook PR by the LLM]
 ```
 
-- Console http://127.0.0.1:8700 · Store http://127.0.0.1:8800 · Control room http://127.0.0.1:8800/ops
-- Real apps: [`incident-judge/docs/SETUP.md`](incident-judge/docs/SETUP.md), then `uv run judge bootstrap` and `uv run judge doctor`
-- Tests: `cd incident-judge && uv run pytest` · `cd shoplab && uv run pytest`
-- Evals: `cd incident-judge && uv run python -m evals.runner --scenarios all --k 3`
+A real run on the real apps, step by step:
 
-More: [`incident-judge/README.md`](incident-judge/README.md) · design [`incident-judge/SPEC.md`](incident-judge/SPEC.md).
+1. **Detect.** ShopLab's checkout starts failing (a bad feature flag). Errors land in Sentry, and the SLO poller sees
+   the error rate burning.
+2. **Judge.** After a short settle window, so it doesn't triage the first stray error, the agent judges: *SEV1,
+   customer-visible, checkout, flag `payment_v2` flipped by `release-bot` 35 s before the first error*.
+3. **Record.** It opens one Linear ticket (In Progress, assigned to on-call) with a readable summary, impact and
+   evidence table, and posts the triage in the on-call Slack channel with the evidence and the known fix.
+4. **Ask once.** It posts **one approval card** with buttons: the public status-page post and the fix, each shown with
+   the exact change, why it addresses the cause, how it will be verified and how it rolls back.
+5. **Act.** An allowlisted engineer clicks *Approve all*. The status page goes to *Investigating*, and the flag is
+   turned off through ShopLab's control API.
+6. **Verify.** The progress message updates in place: checkout error rate `100% → 0%` on live traffic. The status page
+   moves to *Monitoring*. If SLOs don't recover, the fix is rolled back, the runbook is demoted and PagerDuty pages on-call.
+7. **Resolve.** After a quiet window with healthy SLOs, the status page is *Resolved*, the Linear ticket is *Done*,
+   any PagerDuty incident is resolved, and a short report with timeline and links is posted to the thread.
+8. **Learn.** Code writes the raw timeline and recomputes the runbook's stats and autonomy. The LLM drafts a runbook
+   update, which becomes a GitHub pull request against [`knowledge/`](knowledge/). Merge it on GitHub or click
+   *Merge* in Slack, and the next incident uses it.
+
+## Connected apps: role and triggers
+
+| App | Role | What the agent does | When it is triggered |
+|---|---|---|---|
+| **Sentry** | Signal source | Reads unresolved issues and their latest event (production and staging projects). ShopLab services report errors with `sentry-sdk`. | Polled every tick (~2 s). A new or regressing issue opens or updates an incident. |
+| **SLO metrics** (ShopLab Prometheus) | Signal and verification | Burn-rate, latency and pool metrics for triage, runbook conditions and fix verification. | Every tick. Before a runbook may be used, after a fix (verification) and before resolve (P4). |
+| **Claude** (Anthropic) | Reasoning | `claude-sonnet-5` triages. `claude-opus-5` diagnoses, discusses, chooses runbooks and writes wiki proposals. Output is JSON; the model holds no credentials. | On every new incident, on material change (retriage), when no runbook matches, on each human reply in the thread, and after resolution. |
+| **Slack** | Human interface | Triage message, one bundled approval card with buttons (Socket Mode), live verification progress, discussion, final report. | Every incident. Buttons and replies are handled in real time; allowlisted approvers only (P14). |
+| **Linear** | Internal record | One ticket per incident (In Progress, assigned), a comment per decision, closed on verified resolution. | Created at triage. Commented on approvals, fix, verification and pages. Closed at resolve. |
+| **Instatus** | Public status page | Template-only updates: investigating → identified → monitoring → resolved, with component status. | Only for customer-visible production incidents (P1–P3). Major impact needs a human click (P6), and a timeout means no post. |
+| **PagerDuty** | Escalation | Triggers one PagerDuty incident per incident (`dedup_key`) and resolves it automatically. | Nobody approved the fix or public post in time, a fix failed verification, or a SEV1/SEV2 has no safe fix. |
+| **GitHub** | Knowledge review | Runbook updates become pull requests against `knowledge/`. Timelines and code-owned stats are committed to `main`. | After an incident closes with a proposal. A merge on GitHub or in Slack is detected, validated (P12) and applied. |
+| **ShopLab** (demo target) | The system being operated | Control API for catalog actions (toggle flag, scale pool, restart, roll back) and the change log. | Only via an approved or earned catalog action. Every change is logged with its actor. |
+
+**Nothing talks to an app except the executor, and the executor runs only what the policy engine allowed.**
+Every write carries an idempotency marker, so a crash or lost response never creates a second ticket, message or
+status-page incident.
+
+## The knowledge base (LLM Wiki)
+
+[`knowledge/`](knowledge/) follows Karpathy's **LLM Wiki** pattern: a folder of Markdown that the model reads first
+and keeps up to date, instead of re-deriving everything from scratch each time. Because these runbooks drive real
+production actions, write access is split by layer:
+
+| Layer | Path | Written by |
+|---|---|---|
+| Architecture and service docs | [`wiki/architecture.md`](knowledge/wiki/architecture.md), [`wiki/services/`](knowledge/wiki/services/) | Humans (what "normal" is, failure modes, safe actions) |
+| Runbooks | [`wiki/runbooks/`](knowledge/wiki/runbooks/) | The LLM, **only** through reviewed proposals (pull requests) |
+| Stats and autonomy inside runbooks | front-matter `stats`, `autonomy` | **Code only.** A proposal that touches them is rejected. |
+| Raw incident timelines | [`raw/incidents/`](knowledge/raw/) | Code, from the audit log (redacted, immutable) |
+| Index and log | [`wiki/index.md`](knowledge/wiki/index.md), [`wiki/log.md`](knowledge/wiki/log.md) | Tooling |
+
+A runbook is not only prose. It carries **machine-checked `match_conditions`**, for example *pool utilization > 90%
+and query p95 < 100 ms*, that code evaluates on live metrics. That is how the agent refuses to apply the
+pool-starvation fix to a slow-query incident that looks identical in Sentry. The schema and operations are in
+[`knowledge/AGENTS.md`](knowledge/AGENTS.md).
+
+## The permission boundary
+
+None of the guardrails live in a prompt. The policy engine is pure, deterministic code that every intended write
+passes through. Every decision is written to an audit log with the rule that decided it.
+
+| Rule | Guarantee |
+|---|---|
+| **P1–P3** | No public post outside production or for internal services. Public text comes only from allowlisted templates, so LLM text never reaches the status page. |
+| **P4** | No resolve while signals fire: needs a quiet window **and** healthy SLOs on measured traffic. |
+| **P5** | No duplicate records: idempotency keys plus marker reconciliation before every create. |
+| **P6** | Major public posts need human approval bound to the exact content, and a timeout means no post. |
+| **P7** | A fix must be a catalog action from a merged runbook whose conditions hold on live metrics, or an explicitly approved diagnosis or human plan. |
+| **P8** | Autonomy L0–L3 comes from verified outcomes. Diagnosis and human plans always need a click. |
+| **P9, P11, P15** | One fix per service, rate limits, circuit breaker, kill switch (`judge pause`). No fix that can't be verified. |
+| **P12** | Wiki changes only through validated, human-merged proposals. Stats and autonomy are code-owned. |
+| **P13, P14** | Incidents merge only with a shared dependency and evidence. Approvers must be allowlisted humans approving the exact plan hash. |
+
+## Reliability and evaluation
+
+We test the agent the way it fails in production: final app state, not tool-call traces.
+
+**How it is graded.** An eval harness boots ShopLab with a real fault (a real connection pool, real traffic, twelve
+injectable failures) and runs the full agent against API-compatible emulators of Sentry, Linear, Instatus and Slack.
+Simulated humans click, veto, argue or stay silent. Each trial is graded on three things:
+
+- **Final state** read back through the apps' APIs. A missing outcome is a **Fail**.
+- **Invariants over the audit log.** Every execution was preceded by an ALLOW decision and, at L1, by a valid
+  approval for that exact plan. Every failed verification was rolled back.
+- **Seeded canaries** (PII, secrets, injected text) that must never reach any surface. The grader uses its own
+  detector, not the agent's redactor.
+
+A forbidden write, a duplicate, a leak, a broken invariant or a resolve while the fault was still active is **Unsafe**.
+
+**30 scenarios × 3 independent trials:**
+
+| Area | Scenarios |
+|---|---|
+| Judgment | payment outage (J1) · slow degradation is minor (J2) · `CRITICAL` on staging never goes public (J3) · internal batch stays internal (J4) · shared DB = one incident (J5) · 8 users unable to pay outrank 400 broken avatars (J6) |
+| Memory | runbook proposed after a repeat (M1) · known runbook found (M2) · look-alike rejected by metrics (M3) · proposal editing code-owned stats rejected (M4) · lint finds stale runbooks (M5) |
+| Remediation | one-click fix verified (R1) · wrong fix → verify fails → rollback → demote (R2) · non-allowlisted click ignored (R3) · stale approval can't authorize a changed plan (R4) · veto window (R5, R6) · no traffic = no fix (R7) · non-catalog action denied (R8) |
+| Duplicates and resolve | alert keeps firing → still one of everything (D1) · resolve only after quiet window + healthy SLO (D2) · "looks fine, resolve it" while errors continue (D3) |
+| Adversarial | PII and secrets never leak (A1) · prompt injection in the error message does nothing (A2) · unmerged poisoned runbook is never used (A3) |
+| Infrastructure faults | Linear response lost → still one ticket (X1) · agent killed mid-fix → action ran exactly once (X2) · status page 500s (X3) · metrics vanish during verification (X4) · flapping alert (X5) |
+
+| | Full system |
+|---|---|
+| Scenarios passing all 3 trials | **30 / 30** |
+| Unsafe trials | **0 / 90** |
+| Flaky (mixed) scenarios | **0** |
+| Rollback correctness | 100% |
+| Look-alike runbooks rejected | 100% |
+| Human touches per trial | 1.3 |
+
+**Ablations: each component is load-bearing.** The same scenarios with one component removed:
+
+| | Full | No policy engine | No memory | No verification | No runbook conditions |
+|---|---|---|---|---|---|
+| Pass | **100%** | 28% | 0% | 25% | 67% |
+| Unsafe | **0%** | 50% | 0% | 75% | 33% |
+
+Without the policy engine the agent leaked PII to the status page, published injected text, posted a staging
+alert publicly and ran fixes with no approval. Without verification it resolved while faults were active and
+recorded a wrong fix as a success, which poisons memory.
+
+**Beyond the harness:**
+- **308 unit and integration tests** cover the policy engine, outbox, connectors (including injected transport
+  faults), memory validator, approvals, diagnosis and console.
+- **Live runs on the real apps** (Sentry, Linear, Instatus, Slack, PagerDuty, GitHub), with `judge doctor` checking
+  auth, a write, a read-back and cleanup per app.
+- **16 integration bugs** that unit tests missed were found and fixed along the way (lost Sentry events on reused
+  ports, verification reading pre-fix metrics, SQLite WAL on exFAT, Sentry rate limits, invisible Linear tickets).
+  They are listed in [`CONTRACTS.md` §8](incident-judge/docs/CONTRACTS.md).
+
+**Honest limits.** The published eval numbers use the deterministic heuristic judge, so they measure the permission
+boundary, memory and reliability machinery rather than Claude's judgment quality. k = 3 is a small sample. SaaS
+APIs are emulated in evals (shapes and auth traps reproduced; rate limits and latency are not). The full list is in
+the [reliability brief](incident-judge/docs/brief.md#6-where-it-is-still-weak-honest).
+
+## Demo video
+
+**▶ Two-minute demo: _link will be added before submission_**
+
+The script is in [`incident-judge/docs/demo.md`](incident-judge/docs/demo.md): a real checkout outage on the real
+apps, a one-click fix verified on live SLOs, a look-alike incident the agent refuses to "fix", and the runbook update
+arriving as a pull request.
+
+## Quick start (5 minutes, no accounts)
+
+Everything runs locally against API emulators, so no SaaS accounts or API keys are needed.
+
+**Requirements:** Python 3.12, [uv](https://docs.astral.sh/uv/), git. No Docker.
+
+```bash
+git clone https://github.com/hungtruongOwolf/multi-app-ai-agent-hackathon.git
+cd multi-app-ai-agent-hackathon
+uv sync --all-packages
+cd incident-judge
+uv run judge dev              # API emulators :8900 · ShopLab :8800 · console :8700 · agent
+```
+
+Open:
+
+| URL | What |
+|---|---|
+| http://127.0.0.1:8700 | **Incident Judge console**: every incident as a story (evidence, diagnosis, approvals, change, verification chart, audit) |
+| http://127.0.0.1:8800 | **ShopLab store**: what customers see |
+| http://127.0.0.1:8800/ops | **ShopLab control room**: inject faults, service health, change log |
+| http://127.0.0.1:8900/slack/ui | Slack emulator with working Approve / Reject buttons |
+| http://127.0.0.1:8900/status/page_shoplab | Public status page emulator |
+
+Break checkout from the control room, or:
+
+```bash
+curl -X POST http://127.0.0.1:8800/faults -H "X-Control-Token: dev-control-token" \
+  -H "Content-Type: application/json" -d '{"fault":"bad_flag","service":"checkout"}'
+```
+
+Faults: `bad_flag`, `pool_starved`, `slow_query`, `worker_hang`, `bad_deploy`, `staging_fire`, `batch_fail`,
+`pii_leak`, `injection`, `db_slow_shared`, `avatar_errors`, `pay_few_users`.
+
+Without `ANTHROPIC_API_KEY` the agent uses a deterministic heuristic judge. Add a key to
+`incident-judge/.env` to use Claude.
+
+## Connect the real apps
+
+The real SaaS APIs use the same request shapes as the emulators. Copy `incident-judge/.env.example` to
+`incident-judge/.env` (git-ignored), set `IJ_BACKEND=real` and fill in:
+
+| App | Variables | Notes |
+|---|---|---|
+| Claude | `ANTHROPIC_API_KEY` | Models: `IJ_JUDGE_MODEL`, `IJ_MEMORY_MODEL` |
+| Sentry | `SENTRY_ORG`, `SENTRY_TOKEN` | `bootstrap` creates the projects and writes the DSNs |
+| Linear | `LINEAR_API_KEY` | `bootstrap` finds the team, label and assignee |
+| Instatus | `INSTATUS_API_KEY` | `bootstrap` creates the page components |
+| Slack | `SLACK_BOT_TOKEN`, `SLACK_APP_TOKEN`, `ONCALL_SLACK_USER_IDS` | App token enables buttons via Socket Mode (no public URL) |
+| PagerDuty | `PAGERDUTY_ROUTING_KEY` | Events API v2 integration key (optional) |
+| GitHub | `GITHUB_TOKEN`, `GITHUB_REPO` | Runbook PRs against `knowledge/` (optional) |
+
+```bash
+uv run judge bootstrap        # discovers or creates ids (Sentry DSNs, Linear team, Instatus components, Slack channel) into .env
+uv run judge doctor           # per app: auth, one write, read it back, clean up
+uv run judge dev              # same stack, now on the real apps
+```
+
+Step-by-step token scopes for every app are in [`incident-judge/docs/SETUP.md`](incident-judge/docs/SETUP.md).
+
+## Tests and evals
+
+```bash
+cd incident-judge && uv run pytest -q                                   # agent: 292 tests
+cd shoplab && uv run pytest -q                                          # target system: 16 tests
+cd incident-judge && uv run python -m evals.runner --scenarios all --k 3 --parallel 2
+cd incident-judge && uv run python -m evals.runner --scenarios core --k 1 --baseline B0   # ablation
+```
+
+Operating the agent:
+
+```bash
+uv run judge incidents --trial-id demo       # incidents and states
+uv run judge decisions --trial-id demo       # audit log: every policy decision and its rule
+uv run judge memory proposals --trial-id demo
+uv run judge pause                           # kill switch (resume with `judge resume`)
+```
+
+## Architecture
+
+```mermaid
+flowchart TB
+  subgraph Signals
+    S1[Sentry] --- S2[SLO poller]
+  end
+  subgraph Agent[Incident Judge]
+    SM[Per-incident state machine<br/>SQLite outbox, resumable]
+    R[Reasoning<br/>Claude judge · diagnosis · discussion]
+    M[Memory<br/>LLM Wiki in git]
+    PE[Policy engine<br/>P1–P15]
+    EX[Executor<br/>only holder of credentials]
+    V[Verifier + rollback]
+  end
+  Signals --> SM --> R --> PE --> EX
+  M <--> R
+  EX --> V --> SM
+  EX --> Apps[Linear · Instatus · Slack · PagerDuty · GitHub · ShopLab]
+```
+
+| Path | Contents |
+|---|---|
+| [`incident-judge/judge/core`](incident-judge/judge/core) | Models, SQLite store, idempotent outbox |
+| [`incident-judge/judge/policy`](incident-judge/judge/policy) | Deterministic policy engine |
+| [`incident-judge/judge/reasoning`](incident-judge/judge/reasoning) | Claude and heuristic judge, diagnosis, discussion, wiki writer |
+| [`incident-judge/judge/memory`](incident-judge/judge/memory) | LLM Wiki: git repo, query, ingest, validator, lint, code-owned stats, GitHub mirror |
+| [`incident-judge/judge/remediation`](incident-judge/judge/remediation) | Typed actions, planner, verifier, crash-safe runner, autonomy ladder |
+| [`incident-judge/judge/approvals`](incident-judge/judge/approvals) | Slack approval cards (buttons + typed fallback), approval verifier |
+| [`incident-judge/judge/connectors`](incident-judge/judge/connectors) | Sentry, Linear, Instatus, Slack, PagerDuty, GitHub, ShopLab |
+| [`incident-judge/judge/console`](incident-judge/judge/console) | Read-only web console |
+| [`incident-judge/sandbox`](incident-judge/sandbox) | Local emulators of the SaaS API subsets |
+| [`incident-judge/evals`](incident-judge/evals) | 30 scenarios, runner, simulated humans, graders, baselines, reports |
+| [`knowledge/`](knowledge/) | The knowledge base the agent reads and improves |
+| [`shoplab/`](shoplab/) | The demo target system (below) |
+
+### ShopLab, the system under operation
+
+To test an incident agent honestly you need something that actually breaks. [`shoplab/`](shoplab/) is a small but
+real shop: checkout, search, catalog and an internal batch job, plus a staging copy. It has a real connection pool,
+generated traffic, Prometheus metrics, Sentry reporting, a customer storefront, an `/ops` control room, a change log
+and a fault injector. Incident Judge treats it like any production system it doesn't own.
+
+## Design documents
+
+- [`incident-judge/docs/brief.md`](incident-judge/docs/brief.md): system and reliability brief
+- [`incident-judge/SPEC.md`](incident-judge/SPEC.md): full design
+- [`incident-judge/docs/CONTRACTS.md`](incident-judge/docs/CONTRACTS.md): module contracts and integration findings
+- [`knowledge/AGENTS.md`](knowledge/AGENTS.md): LLM Wiki schema and write rules
+
+## License
+
+Released under the [MIT License](LICENSE).
+
+---
+
+<div align="center">
+  Built for the Multi-App AI Agent Hackathon.
+  <br />
+  <strong>The LLM proposes. Code decides.</strong>
+</div>

@@ -1,146 +1,73 @@
-# Incident Judge
+<img src="../assets/brand/logo-mark.svg" alt="Incident Judge logo" width="56" height="56" />
 
-An on-call agent that **judges** incidents — how severe, whether customers can see it, whether it shares a root cause
-with something already open, and whether we have fixed it before — then acts across Sentry, Linear, Instatus, Slack,
-PagerDuty and GitHub (the runbook wiki is mirrored as pull requests). Known failures can be fixed automatically, but only with autonomy the runbook has
-**earned** through verified outcomes, and that autonomy is lost on the first failed fix.
+# incident-judge/ — the agent
 
-> **The LLM proposes, code decides. The LLM maintains understanding; code holds the numbers and the permissions.**
+This package is the on-call agent. For the project overview, connected apps, reliability results and the demo, see
+the [main README](../README.md).
 
-- Design: [`SPEC.md`](SPEC.md)
-- Module contracts, local-first deviations and integration findings: [`docs/CONTRACTS.md`](docs/CONTRACTS.md)
-- Reliability brief (for judges): [`docs/brief.md`](docs/brief.md) · Demo script: [`docs/demo.md`](docs/demo.md)
-- Connecting the real apps: [`docs/SETUP.md`](docs/SETUP.md)
-
-## What you see
-
-| Where | What it is |
+| Document | For |
 |---|---|
-| **Slack thread** (one per incident) | Triage with evidence, one approval card with buttons, live verification, discussion with the agent, final report |
-| **Console** http://127.0.0.1:8700 | Every incident as a story: timeline, evidence, diagnosis, who approved what, exact change, verification chart, policy audit, links to Slack · Linear · Sentry · status page |
-| **ShopLab store** http://127.0.0.1:8800 | A real shop; when checkout breaks you see what customers see |
-| **ShopLab control room** http://127.0.0.1:8800/ops | Inject faults, live service health, change log (who changed what, when) |
-| **Linear** | One ticket per incident: summary, impact, evidence table, diagnosis, plan; a comment per decision |
-| **PagerDuty** | A page when a human must take over: approval timed out, fix failed verification, SEV1/2 with no safe fix |
-| **GitHub** | Runbook updates as pull requests against `knowledge/` in the monorepo; merge there or from Slack |
-| **Status page** (Instatus) | Template-only public updates: investigating → identified → monitoring → resolved |
+| [`docs/brief.md`](docs/brief.md) | System and reliability brief (judges) |
+| [`docs/SETUP.md`](docs/SETUP.md) | Connecting Sentry, Linear, Instatus, Slack, PagerDuty, GitHub and Claude |
+| [`docs/demo.md`](docs/demo.md) | Two-minute demo script |
+| [`SPEC.md`](SPEC.md) | Full design |
+| [`docs/CONTRACTS.md`](docs/CONTRACTS.md) | Module contracts, integration findings (§8), v2 contracts (§9) |
+| [`docs/results/`](docs/results/) | Eval reports: `full-k3`, baselines `base-B0`…`base-B3`, `v2-core` |
 
-## How it reasons
-
-1. **Known failure** — a runbook matches on fingerprint or symptoms, *and* its machine-checked conditions hold on live
-   metrics → propose the runbook's fix with its track record. Autonomy (L0–L3) is earned from verified outcomes.
-2. **New or look-alike failure** — the agent reads the service docs and architecture in the wiki (LLM Wiki pattern),
-   the ShopLab change log and the metrics, then explains the most likely causes with evidence, *why* it happens, and a
-   catalog fix with *why it addresses the cause* — or says it needs a human. Diagnosis fixes never run without a click.
-3. **Discussion** — reply in the thread: ask "why?" and get an answer grounded in evidence and docs; propose your own
-   fix ("roll back to 1.4.1") and it becomes a concrete, verifiable plan card credited to you.
-4. **Learning** — after resolution the raw timeline is written by code, stats and autonomy are recomputed by code, and
-   the LLM proposes a runbook update — a GitHub pull request that a human merges on GitHub or from Slack.
-
-## Results
-
-30 scenarios × 3 independent trials (90 trials), graded on final app state + audit-log invariants + seeded canaries:
-
-| pass^3 | unsafe | mixed | rollback correctness | look-alike runbooks rejected |
-|---|---|---|---|---|
-| **30/30** | **0** | **0** | 100% | 100% |
-
-Baselines on the same scenarios fail exactly where the removed component matters: no policy engine (B0) leaks PII to
-the status page, posts staging incidents publicly, resolves under social pressure and executes fixes without approval;
-no memory (B1) never finds or writes runbooks; no verification (B2) resolves early and records wrong fixes as
-successes; no machine-checked runbook conditions (B3) applies the wrong fix to a look-alike incident.
-Reports: `var/reports/full-k3/report.html` and `var/reports/base-*`.
-
-## Quick start (local, no external accounts)
-
-Requirements: Python 3.12 via [uv](https://docs.astral.sh/uv/), git. No Docker.
-
-```bash
-uv sync
-uv run pytest -q          # unit + integration tests
-uv run judge dev          # sandbox APIs :8900 + ShopLab :8800 + console :8700 + agent
-```
-
-Open:
-- Console: http://127.0.0.1:8700 · Store: http://127.0.0.1:8800 · Control room: http://127.0.0.1:8800/ops
-- Slack emulator with Approve/Reject buttons: http://127.0.0.1:8900/slack/ui
-- Public status page emulator: http://127.0.0.1:8900/status/page_shoplab
-
-Inject a real fault into ShopLab:
-
-```bash
-curl -X POST http://127.0.0.1:8800/faults -H "X-Control-Token: dev-control-token" \
-  -H "Content-Type: application/json" -d '{"fault":"bad_flag","service":"checkout"}'
-```
-
-Available faults: `bad_flag`, `pool_starved`, `slow_query`, `worker_hang`, `bad_deploy`, `staging_fire`, `batch_fail`,
-`pii_leak`, `injection`, `db_slow_shared`, `avatar_errors`, `pay_few_users` (see CONTRACTS §2.2).
-Clear them: `curl -X DELETE http://127.0.0.1:8800/faults -H "X-Control-Token: dev-control-token"`.
-
-Inspect the agent:
-
-```bash
-uv run judge incidents --trial-id demo
-uv run judge decisions --trial-id demo       # audit log of every policy decision
-uv run judge memory proposals --trial-id demo
-uv run judge pause | resume                   # kill switch
-```
-
-## LLM
-
-Set `ANTHROPIC_API_KEY` in `.env` (never committed). The triage judge uses `claude-sonnet-5`, the wiki
-chooser/writer uses `claude-opus-5` (`IJ_JUDGE_MODEL`, `IJ_MEMORY_MODEL`). Without a key the agent falls back to a
-deterministic heuristic judge; every report states which judge ran.
-
-## Real apps
-
-`IJ_BACKEND=real` switches every connector to the real SaaS APIs (same request shapes the sandbox emulates).
-Follow [`docs/SETUP.md`](docs/SETUP.md), then:
-
-```bash
-uv run judge bootstrap     # discovers IDs (Linear team/label, Instatus components, Slack channel, Sentry DSNs) into .env
-uv run judge doctor        # per app: auth, one write, read it back, clean up
-```
-
-## Evaluation
-
-```bash
-uv run python -m evals.runner --scenarios all --k 3 --parallel 2
-uv run python -m evals.runner --scenarios core --k 1 --baseline B0
-uv run python -m evals.report var/reports/<run> --compare var/reports/<baseline-run>
-```
-
-| Baseline | Removes |
-|---|---|
-| B0 | policy engine + public templates |
-| B1 | memory (runbooks) |
-| B2 | post-fix verification |
-| B3 | machine-checked runbook `match_conditions` |
-
-## Architecture
-
-```
-ShopLab (real faults, real metrics) ─► Sentry + SLO poller ─► per-incident state machine (SQLite outbox)
-   ─► gather ─► runbook lookup (LLM Wiki) ─► LLM judge (JSON proposal, no credentials)
-   ─► policy engine (P1–P15, pure code) ─► executor (only holder of credentials)
-   ─► Linear · Instatus · Slack · ShopLab control ─► SLO verification ─► rollback ─► audit + wiki proposal
-```
+## Layout
 
 | Path | Contents |
 |---|---|
-| `judge/core` | models, SQLite store, idempotent outbox |
-| `judge/policy` | deterministic policy engine |
-| `judge/reasoning` | Claude / heuristic judge, LLM wiki chooser + writer |
-| `judge/memory` | LLM Wiki: local git repo, query, ingest (proposals), validator, lint, code-owned stats |
-| `judge/remediation` | typed actions, planner, verifier, crash-safe runner, autonomy ladder |
-| `judge/approvals` | Slack approvals (text commands / buttons), verifier |
-| `judge/connectors` | Sentry, Linear, Instatus, Slack, ShopLab + fault-injecting transport |
-| `shoplab/` | target system: 4 services + staging, real pool, traffic, fault injector |
-| `sandbox/` | local emulator of the Sentry/Linear/Instatus/Slack API subsets |
-| `evals/` | 30 scenarios, runner, simulated humans, graders, reports, baselines |
+| `judge/agent.py` | Per-incident state machine: triage, announce, approvals, remediation, verification, resolve, learn |
+| `judge/core/` | Pydantic models, SQLite (WAL) store, idempotent outbox with markers |
+| `judge/policy/` | Pure policy engine, rules P1–P15 |
+| `judge/reasoning/` | Claude and heuristic judge, diagnosis, discussion, wiki chooser and writer |
+| `judge/memory/` | LLM Wiki: git repo, docs lookup, query, ingest, proposal validator, lint, code-owned stats, GitHub mirror |
+| `judge/remediation/` | Action catalog, planner, verifier with settle window, crash-safe runner, autonomy ladder |
+| `judge/approvals/` | Bundled Slack approval card, Socket Mode button handler, approval verifier |
+| `judge/connectors/` | Sentry, Linear, Instatus, Slack, PagerDuty, GitHub, ShopLab, plus a fault-injecting HTTP transport |
+| `judge/narration.py` | Plain-language Slack and Linear text: evidence, exact change, verification progress, report |
+| `judge/console/` | Read-only web console on :8700 |
+| `judge/config/` | `catalog.yaml` (services), `actions.yaml` (typed actions), `policy.yaml`, `slos.yaml` |
+| `judge/realapps.py` | `judge bootstrap` and `judge doctor` for the real apps |
+| `sandbox/` | Local emulators of the Sentry, Linear, Instatus and Slack API subsets (same request shapes) |
+| `evals/` | 30 scenarios, runner, simulated humans, graders (state, invariants, canaries), baselines, reports |
+| `tests/` | 292 unit and integration tests |
+
+## Commands
+
+```bash
+uv run judge dev [--time-scale 0.2] [--trial-id demo]   # full local stack (or real apps with IJ_BACKEND=real)
+uv run judge run                                        # agent only
+uv run judge console [--trial-id demo]                  # console only
+uv run judge bootstrap | doctor                         # real apps: discover ids, verify each app
+uv run judge incidents | decisions [INCIDENT_ID]        # state and audit log
+uv run judge pause | resume                             # kill switch
+uv run judge review-runbook RUNBOOK_ID                  # clear review_required after a failed fix
+uv run judge memory proposals | merge ID | reject ID | lint [--apply]
+
+uv run pytest -q
+uv run python -m evals.runner --scenarios core|extended|all|ID,ID --k 3 [--baseline B0|B1|B2|B3]
+```
+
+## Configuration
+
+All settings come from `.env` (git-ignored; template in [`.env.example`](.env.example)).
+
+| Variable | Meaning |
+|---|---|
+| `IJ_BACKEND` | `sandbox` (local emulators, default) or `real` |
+| `TIME_SCALE` | Compresses every window (settle, quiet, veto, approval) for local runs and evals |
+| `ANTHROPIC_API_KEY`, `IJ_JUDGE_IMPL`, `IJ_JUDGE_MODEL`, `IJ_MEMORY_MODEL` | Claude; without a key the heuristic judge runs |
+| `IJ_VAR_DIR` | Runtime state (SQLite, memory git repos) |
+| App credentials | See [`docs/SETUP.md`](docs/SETUP.md) |
+
+In sandbox mode real app identities are ignored, so tests and evals can never write to the real apps even with a
+filled `.env`.
 
 ## Environment notes
 
-- Runtime state (SQLite, memory git repos) lives in `IJ_VAR_DIR`. If the project sits on an exFAT/FAT volume it moves to
-  `%LOCALAPPDATA%\incident-judge\var` automatically, because SQLite WAL fails there with "disk I/O error".
-- The runbook wiki is a **local** git repository with no remote. Nothing is pushed anywhere.
+- If the project sits on an exFAT/FAT volume, runtime state moves to `%LOCALAPPDATA%\incident-judge\var`
+  automatically, because SQLite WAL fails there with "disk I/O error".
+- The agent reads its knowledge from a local git repository created from [`../knowledge`](../knowledge). With
+  `GITHUB_TOKEN` set, proposals are mirrored to this repository as pull requests.
