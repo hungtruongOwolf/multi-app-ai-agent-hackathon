@@ -33,6 +33,7 @@ without ever letting the model hold a credential or make the final call.
 | Technical depth | [LLM Wiki knowledge base](#the-knowledge-base-karpathys-llm-wiki-made-safe-to-act-on) · [Engineering highlights](#engineering-highlights) · [Architecture](#architecture) |
 | Setup instructions | [Quick start (no accounts)](#quick-start-5-minutes-no-accounts) · [Connect the real apps](#connect-the-real-apps) |
 | How we tested reliability | [Reliability and evaluation](#reliability-and-evaluation) · [full brief](incident-judge/docs/brief.md) |
+| Screenshots | [Console, Sentry, PagerDuty, status page, Linear](#screenshots-from-the-live-runs) |
 | Two-minute demo | [youtu.be/vH7voZyG5Fg](https://youtu.be/vH7voZyG5Fg) |
 | Console from the live runs | [incident-judge-console.vercel.app](https://incident-judge-console.vercel.app) (read-only snapshot: incidents, approvals, verification, knowledge graph) |
 | License | [MIT](LICENSE) |
@@ -272,6 +273,14 @@ recorded a wrong fix as a success, which poisons memory.
 The script is in [`incident-judge/docs/demo.md`](incident-judge/docs/demo.md): a real checkout outage on the real
 apps, a one-click fix verified on live SLOs, a look-alike incident the agent refuses to "fix", and the runbook update
 arriving as a pull request.
+
+## Screenshots from the live runs
+
+| | |
+|---|---|
+| **Incident Judge console**: where things stand, the story and every app's live state for one incident<br><img src="assets/screenshots/console-incident.png" alt="Incident Judge console: incident page with story and live state across the apps" /> | **Knowledge graph**: services, incidents, runbooks with earned autonomy, fixes and runbook PRs<br><img src="assets/screenshots/knowledge-graph-console.png" alt="Knowledge graph in the console" /> |
+| **Sentry**: ShopLab's real errors, the signals the agent judges (and resolves when the incident is fixed)<br><img src="assets/screenshots/sentry.png" alt="Sentry issues feed for shoplab-prod" /> | **PagerDuty**: on-call paged when nobody approved in time, or when there is no safe fix<br><img src="assets/screenshots/pagerduty.png" alt="PagerDuty incidents triggered by Incident Judge" /> |
+| **Status page (Instatus)**: template-only public updates, posted only after approval<br><img src="assets/screenshots/statuspage.png" alt="Public status page with incidents posted by Incident Judge" /> | **Linear**: one ticket per incident, in progress while open, done on verified resolution<br><img src="assets/screenshots/linear.png" alt="Linear issues created and closed by Incident Judge" /> |
 
 ## Quick start (5 minutes, no accounts)
 
