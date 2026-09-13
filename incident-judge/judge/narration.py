@@ -79,7 +79,8 @@ def match_lines(match: dict) -> list[str]:
     if not match.get("runbook_id"):
         return ["No runbook matched this incident."]
     ok = match.get("match_ok")
-    head = {True: "matched", False: "looks similar but does NOT match", None: "could not be checked"}[ok]
+    head = {True: "matched", False: "looks similar but does NOT match", None: "could not be checked",
+            "already_in_effect": "matched, but its fix is already in effect"}.get(ok, "could not be checked")
     lines = [f"Runbook `{match['runbook_id']}` {head} (found via {match.get('via')}):"]
     for c in match.get("condition_results", []):
         if c.get("check") != "metric":

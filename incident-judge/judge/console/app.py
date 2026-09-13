@@ -437,8 +437,9 @@ def render_incident(data: ConsoleData, inc: Incident, live: LiveApps | None = No
             f'<strong>{h.e(fmt_value(c["metric"], c.get("observed")))}</strong> '
             f'<span class="muted">needs {h.e(c["op"])} {h.e(fmt_value(c["metric"], c["value"]))}</span></li>'
             for c in match.get("condition_results", []) if c.get("check") == "metric")
-        verdict = {True: ("matched", "green"), False: ("does not match", "red"), None: ("could not be checked", "gray")}[
-            match.get("match_ok")]
+        verdict = {True: ("matched", "green"), False: ("does not match", "red"), None: ("could not be checked", "gray"),
+                   "already_in_effect": ("fix already in effect", "orange")}.get(match.get("match_ok"),
+                                                                             ("could not be checked", "gray"))
         evidence_html += (f'<div class="subcard"><div class="subcard-head">{h.icon("book")}<a href="/wiki/runbooks/'
                           f'{h.e(match["runbook_id"])}">{h.e(match["runbook_id"])}</a> {h.badge(verdict[0], verdict[1])}'
                           f'<span class="muted small">found via {h.e(match.get("via"))}</span></div>'
