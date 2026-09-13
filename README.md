@@ -33,7 +33,7 @@ without ever letting the model hold a credential or make the final call.
 | Technical depth | [LLM Wiki knowledge base](#the-knowledge-base-karpathys-llm-wiki-made-safe-to-act-on) · [Engineering highlights](#engineering-highlights) · [Architecture](#architecture) |
 | Setup instructions | [Quick start (no accounts)](#quick-start-5-minutes-no-accounts) · [Connect the real apps](#connect-the-real-apps) |
 | How we tested reliability | [Reliability and evaluation](#reliability-and-evaluation) · [full brief](incident-judge/docs/brief.md) |
-| Screenshots | [Console, Sentry, PagerDuty, status page, Linear](#screenshots-from-the-live-runs) |
+| Screenshots | [Slack, console, Sentry, PagerDuty, status page, Linear](#screenshots-from-the-live-runs) |
 | Two-minute demo | [youtu.be/vH7voZyG5Fg](https://youtu.be/vH7voZyG5Fg) |
 | Console from the live runs | [incident-judge-console.vercel.app](https://incident-judge-console.vercel.app) (read-only snapshot: incidents, approvals, verification, knowledge graph) |
 | License | [MIT](LICENSE) |
@@ -275,6 +275,10 @@ apps, a one-click fix verified on live SLOs, a look-alike incident the agent ref
 arriving as a pull request.
 
 ## Screenshots from the live runs
+
+**Slack**: one thread per incident with the evidence, the known fix, the approval card, the verification and the final report, including PagerDuty and the runbook pull request
+
+<p align="center"><img src="assets/screenshots/slack.png" alt="Slack incident thread from Incident Judge" width="900" /></p>
 
 | | |
 |---|---|
