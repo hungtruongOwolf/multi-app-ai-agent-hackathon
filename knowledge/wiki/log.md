@@ -9,3 +9,4 @@ Lines labelled `candidate` = an incident class seen for the first time, no runbo
 - 2026-09-13T21:09Z | inc_f927aeddcd | fp:58b762d98f59 | catalog | SEV2 | no-action | runbook:db-pool-starved | occurrence:1
 - 2026-09-13T21:18Z | inc_47e61c231a | fp:ef213e3dc5cf | checkout | SEV1 | no-action | runbook:checkout-payment-v2-flag | occurrence:1
 - 2026-09-13T21:33Z | inc_03ec4249ca | fp:ef213e3dc5cf | checkout | SEV1 | none | runbook:checkout-payment-v2-flag | occurrence:2
+- 2026-09-13T21:44Z | inc_7d94032af6 | fp:42a311022a4b | search | SEV2 | success | runbook:- | occurrence:1 | candidate
