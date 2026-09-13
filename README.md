@@ -357,6 +357,30 @@ and a fault injector. Incident Judge treats it like any production system it doe
 - [`incident-judge/docs/CONTRACTS.md`](incident-judge/docs/CONTRACTS.md): module contracts and integration findings
 - [`knowledge/AGENTS.md`](knowledge/AGENTS.md): LLM Wiki schema and write rules
 
+## What's next
+
+Today, connecting Incident Judge means creating a token for each app, one at a time. The next step is to make it
+feel like single sign-on: **connect once, get a working on-call system.**
+
+**Connect once**
+
+1. **Connect your apps** with OAuth from one page (Slack, Linear, Sentry, GitHub, PagerDuty, status page). No copied
+   tokens.
+2. **Review the catalog it builds for you.** Services come from Sentry projects, owners from GitHub `CODEOWNERS`, who to
+   page from PagerDuty escalation policies, and what customers see from status page components.
+3. **Start in shadow mode.** Every runbook begins at L0: the agent only suggests, so it is safe to install on day one.
+   Autonomy is earned from there. Approvers come from your identity provider's on-call group (Okta, Google Workspace).
+
+**Then**
+
+| | Why it matters |
+|---|---|
+| **Learn from history.** Import past incidents from PagerDuty, Linear and Slack, and replay them to measure the agent before it touches anything. | The knowledge base is useful on the first day, not after months of incidents. |
+| **Act on real infrastructure.** Kubernetes rollouts and scaling, LaunchDarkly flags, Argo CD or Vercel rollbacks, metrics from Datadog or Prometheus. | ShopLab's control API becomes the systems teams actually run. |
+| **Propose its own discriminators.** Suggest `match_conditions` for runbooks and backtest them against past incidents before a human merges. | Today these are written by hand, which is the main limit on how many runbooks can earn autonomy. |
+| **Prevent, not just respond.** Comment on a pull request that touches something tied to a past incident, and run scheduled game days in staging so runbooks that are never exercised lose autonomy. | Fewer repeat incidents, and runbooks that stay true to the system. |
+| **Close the loop.** Draft the post-mortem, file its action items in Linear, and export the decision log for audits. | The learning doesn't depend on someone finding time after the incident. |
+
 ## License
 
 Released under the [MIT License](LICENSE).
