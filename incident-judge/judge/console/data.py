@@ -245,6 +245,11 @@ class ConsoleData:
             at = _dt(change.get("at"))
             if at:
                 ev.append(TimelineEvent(at, "change", "Change applied", change.get("change", ""), "blue"))
+        for hc in self.kv(f"{inc.id}:human_changes") or []:
+            at = _dt(hc.get("at"))
+            if at:
+                ev.append(TimelineEvent(at, "change", f"Changed by {hc.get('actor')}",
+                                        f"{hc.get('service')}: {hc.get('summary')} (outside the agent)", "teal"))
         for pv in self.plans(inc):
             for x in pv.executions:
                 if x["kind"] in ("rollback", "revert"):

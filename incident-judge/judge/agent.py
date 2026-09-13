@@ -588,6 +588,20 @@ class Agent:
             return f"Ticket: <{info['url']}|Linear {info.get('identifier')}>\n"
         return f"Ticket: Linear `{inc.linear_issue_id}`\n" if inc.linear_issue_id else ""
 
+    async def _record_human_changes(self, inc: Incident) -> None:
+        """Changes made outside the agent while the incident was open (a manual rollback, a flag flipped by a person)
+        explain why it recovered; keep them for the report and the console."""
+        from judge.connectors.shoplab import ShopLabControl
+
+        try:
+            rows = await self.d.control.changes(since=inc.created_at.isoformat())
+        except Exception:
+            return
+        human = [{"at": r.get("ts"), "service": r.get("service"), "actor": r.get("actor"), "summary": r.get("summary")}
+                 for r in rows or [] if r.get("service") in inc.services and r.get("actor") != ShopLabControl.ACTOR]
+        if human:
+            self.store.put_kv(f"{inc.id}:human_changes", human)
+
     async def _already_in_effect(self, plan: Plan) -> str | None:
         try:
             cfg = await self.d.control.get_config(plan.target_service)
@@ -705,6 +719,10 @@ class Agent:
                 verb = {"apply": "Change applied", "rollback": "Change rolled back"}.get(e["kind"], e["kind"])
                 tl.append((datetime.fromisoformat(e["ts"]), f"{verb}: `{e['action']}` on {e['service']}"))
         changes = [f"{c['change']} (rollback: {c['rollback']})" for c in (self.store.get_kv(f"{inc.id}:changes") or [])]
+        for hc in self.store.get_kv(f"{inc.id}:human_changes") or []:
+            changes.append(f"`{hc['service']}` {hc['summary']} — by {hc['actor']}, outside the agent")
+            if hc.get("at"):
+                tl.append((datetime.fromisoformat(hc["at"]), f"Changed by {hc['actor']}: {hc['service']} {hc['summary']}"))
         links = []
         for meta in self._sentry_meta(sigs).values():
             if meta.get("permalink"):
@@ -1426,6 +1444,7 @@ class Agent:
                 await self.note(inc, ":pager: PagerDuty incident resolved.", key="paged-resolved")
             except Exception as e:
                 log.warning("PagerDuty resolve failed: %r", e)
+        await self._record_human_changes(inc)
         inc = self.store.get_incident(inc.id)
         inc.resolved_at = now()
         self.store.transition(inc, IncidentState.RESOLVED)

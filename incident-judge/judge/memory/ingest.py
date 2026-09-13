@@ -168,6 +168,10 @@ class Ingestor:
         raw_texts = [t for _, _, t in raws[-MAX_RAW_CONTEXT:]]
         agents_md = self.repo.read("AGENTS.md") or ""
         existing = self._runbook_for(incident, fps)
+        if existing is not None and not (incident.runbook_id == existing.id and facts["actions"]):
+            # A runbook that was only looked at (a look-alike, a loose symptom match) and never run for this incident
+            # has nothing to learn from it; rewriting its prose would teach it the wrong incident class.
+            existing = None
 
         if existing is None and len(raws) < 2:
             return None  # first occurrence: raw + candidate log line only
