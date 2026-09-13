@@ -13,6 +13,7 @@ the team has fixed it before. Then it acts across **Sentry, Linear, Instatus, Sl
 without ever letting the model hold a credential or make the final call.
 
 [Watch the 2-minute demo](https://youtu.be/vH7voZyG5Fg) ·
+[Explore the live console](https://incident-judge-console.vercel.app) ·
 [Reliability brief](incident-judge/docs/brief.md) ·
 [Eval report](incident-judge/docs/results/full-k3/report.md) ·
 [Setup guide](incident-judge/docs/SETUP.md)
@@ -33,6 +34,7 @@ without ever letting the model hold a credential or make the final call.
 | Setup instructions | [Quick start (no accounts)](#quick-start-5-minutes-no-accounts) · [Connect the real apps](#connect-the-real-apps) |
 | How we tested reliability | [Reliability and evaluation](#reliability-and-evaluation) · [full brief](incident-judge/docs/brief.md) |
 | Two-minute demo | [youtu.be/vH7voZyG5Fg](https://youtu.be/vH7voZyG5Fg) |
+| Console from the live runs | [incident-judge-console.vercel.app](https://incident-judge-console.vercel.app) (read-only snapshot: incidents, approvals, verification, knowledge graph) |
 | License | [MIT](LICENSE) |
 
 **Results:** 30 scenarios × 3 independent trials, graded on the final state of the apps. **30/30 scenarios pass all
@@ -264,6 +266,8 @@ recorded a wrong fix as a success, which poisons memory.
 ## Demo video
 
 **▶ [Watch the two-minute demo on YouTube](https://youtu.be/vH7voZyG5Fg)**
+
+**🖥 [Explore the console from the live runs](https://incident-judge-console.vercel.app)**: a read-only snapshot of the Incident Judge console after running on the real apps. Open an incident to see its story, what is happening across Slack, Linear, the status page, Sentry, PagerDuty and GitHub, and the [knowledge graph](https://incident-judge-console.vercel.app/wiki/graph).
 
 The script is in [`incident-judge/docs/demo.md`](incident-judge/docs/demo.md): a real checkout outage on the real
 apps, a one-click fix verified on live SLOs, a look-alike incident the agent refuses to "fix", and the runbook update
