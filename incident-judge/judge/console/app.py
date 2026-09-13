@@ -9,6 +9,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, Response
 
 from judge.console import html as h
 from judge.console.data import ConsoleData
+from judge.console.live import LiveApps
 from judge.core.models import Incident
 from judge.narration import fmt_value, label
 from judge.settings import Config, Settings
@@ -19,8 +20,9 @@ KIND_ICON = {"alert": "alert", "triage": "brain", "approval": "hand", "public": 
 
 
 def create_app(settings: Settings | None = None, config: Config | None = None,
-               data: ConsoleData | None = None) -> FastAPI:
+               data: ConsoleData | None = None, live: LiveApps | None = None) -> FastAPI:
     data = data or ConsoleData(settings or Settings.from_env(), config)
+    live = live or LiveApps(data.s)
     app = FastAPI(title="Incident Judge console", docs_url=None, redoc_url=None)
 
     def page(request: Request, title: str, active: str, body: str, **kw) -> HTMLResponse:
@@ -68,9 +70,10 @@ def create_app(settings: Settings | None = None, config: Config | None = None,
         inc = data.incident(incident_id)
         if inc is None:
             raise HTTPException(404, "incident not found")
-        return page(request, _incident_title(data, inc), "incidents", render_incident(data, inc),
+        status = data.status(inc)
+        return page(request, _incident_title(data, inc), "incidents", render_incident(data, inc, live),
                     subtitle=f"{h.severity_badge(inc.severity.value if inc.severity else None)} "
-                             f"{h.state_badge(inc.state.value)} <span class='muted'>opened {h.rel(inc.created_at)}</span>",
+                             f"{h.badge(status['label'], status['tone'])} <span class='muted'>opened {h.rel(inc.created_at)}</span>",
                     refresh=f"/incidents/{inc.id}?partial=1")
 
     @app.get("/api/incidents")
@@ -84,6 +87,7 @@ def create_app(settings: Settings | None = None, config: Config | None = None,
             raise HTTPException(404, "incident not found")
         return JSONResponse({
             **_inc_json(data, inc),
+            "status": data.status(inc),
             "timeline": [{"at": h.when(t.at), "kind": t.kind, "title": h.clean(t.title), "detail": h.clean(t.detail)}
                          for t in data.timeline(inc)],
             "plans": [{"action": p.plan.action, "params": p.plan.params, "status": p.status,
@@ -239,7 +243,7 @@ def render_incident_table(data: ConsoleData, incs: list[Incident], compact: bool
             f'<td>{h.severity_badge(inc.severity.value if inc.severity else None)}</td>'
             f'<td><a href="/incidents/{h.e(inc.id)}" class="strong">{h.e(_incident_title(data, inc))}</a>'
             f'<div class="muted small">{h.e(", ".join(inc.services))} · {h.e(inc.environment.value)}</div></td>'
-            f'<td>{h.state_badge(inc.state.value)}</td>'
+            f'<td>{_status_badge(data, inc)}</td>'
             + ("" if compact else f'<td>{h.e(ident) if ident else "<span class=muted>—</span>"}</td>')
             + f'<td class="num">{age}{"<div class=muted small>took " + took + "</div>" if took else ""}</td></tr>')
     head = ("<th>Severity</th><th>Incident</th><th>Status</th>" + ("" if compact else "<th>Ticket</th>")
@@ -247,7 +251,132 @@ def render_incident_table(data: ConsoleData, incs: list[Incident], compact: bool
     return f'<div class="table-wrap"><table class="table"><thead><tr>{head}</tr></thead><tbody>{"".join(rows)}</tbody></table></div>'
 
 
-def render_incident(data: ConsoleData, inc: Incident) -> str:
+def _status_badge(data: ConsoleData, inc: Incident) -> str:
+    st = data.status(inc)
+    return h.badge(st["label"], st["tone"])
+
+
+def render_status_banner(data: ConsoleData, inc: Incident) -> str:
+    st = data.status(inc)
+    waiting = (f'<div class="banner-wait"><span class="muted small">Waiting on</span><strong>{h.e(st["waiting_on"])}</strong></div>'
+               if st["waiting_on"] else "")
+    return (f'<section class="banner banner-{h.e(st["tone"])}"><div class="banner-main">'
+            f'<div class="banner-kicker">Where things stand</div>'
+            f'<div class="banner-headline">{h.badge(st["label"], st["tone"]) if st["label"] != st["headline"] else ""}'
+            f'{h.e(st["headline"])}</div>'
+            f'<div class="banner-detail">{h.mrkdwn(st["detail"])}</div></div>{waiting}</section>')
+
+
+def render_apps_panel(data: ConsoleData, inc: Incident, live: LiveApps | None) -> str:
+    """One row per external record: what the app shows now (live), falling back to what the agent stored."""
+    sentry_ids = sorted({s.external_id for s in (data.store.signals_for(inc.id) if data.store else [])
+                         if s.source == "sentry" and s.external_id})
+    pr = data.runbook_pr(inc)
+    live_on = bool(live is not None and live.enabled())
+    got = live.fetch(inc, sentry_ids, pr.get("number") if pr else None) if live_on else {}
+
+    def row(app: str, icon: str, state_html: str, detail: str = "", link: str | None = None, link_text: str = "Open") -> str:
+        a = (f'<a href="{h.e(link)}" target="_blank" rel="noopener" class="small">{h.e(link_text)} ↗</a>'
+             if link else "")
+        return (f'<li class="app-row"><span class="app-icon">{h.icon(icon)}</span><div class="app-body">'
+                f'<div class="app-head"><strong>{h.e(app)}</strong><span class="app-state">{state_html}</span></div>'
+                + (f'<div class="muted small">{detail}</div>' if detail else "") + f'</div>{a}</li>')
+
+    def stored(value: str, tone: str) -> str:
+        if live_on:
+            return h.badge(value, tone) + ' <span class="muted small">(agent record; live read failed)</span>'
+        return h.badge(value, tone)
+
+    rows = []
+    # Slack
+    fix_p = data.kv(f"{inc.id}:fix_pending") or {}
+    pub_p = data.kv(f"{inc.id}:public_pending") or {}
+    waiting = [x for x, on in (("fix", bool(fix_p.get("plan_id"))),
+                               ("status page post", bool(pub_p.get("subject")) and not inc.public_posted)) if on]
+    approvals = [a for a in (data.store.approvals(inc.id) if data.store else []) if a.valid]
+    slack_state = (h.badge("waiting for approval: " + ", ".join(waiting), "purple") if waiting
+                   else h.badge(f"{len(approvals)} decision(s) made", "green") if approvals
+                   else h.badge("thread open", "blue") if inc.slack_thread_ts else h.badge("no thread", "gray"))
+    what = {"public_post": "status page post", "fix": "fix", "memory_merge": "runbook update", "veto": "veto"}
+    decided = "; ".join(f"{what.get(a.kind, a.kind)} {a.verdict}d by {h.e(data.person(a.user_id))}" for a in approvals[-3:])
+    rows.append(row("Slack", "slack", slack_state, decided, data.slack_thread_url(inc), "Thread"))
+    # Linear
+    url, ident = data.linear_url(inc)
+    lin = got.get("linear") or {}
+    if lin.get("ok"):
+        tone = {"completed": "green", "canceled": "gray", "started": "blue", "unstarted": "gray",
+                "backlog": "gray", "triage": "orange"}.get(lin.get("state_type"), "gray")
+        detail = f"assigned to {h.e(lin['assignee'])}" if lin.get("assignee") else "unassigned"
+        rows.append(row("Linear", "link", f'{h.e(lin.get("identifier") or ident or "")} {h.badge(lin.get("state") or "?", tone)}',
+                        detail, lin.get("url") or url, "Ticket"))
+    elif inc.linear_issue_id:
+        value = "done" if inc.resolved_at else "in progress"
+        rows.append(row("Linear", "link", f'{h.e(ident or "")} ' + stored(value, "green" if inc.resolved_at else "blue"),
+                        "", url, "Ticket"))
+    else:
+        rows.append(row("Linear", "link", h.badge("no ticket", "gray")))
+    # Status page
+    ins = got.get("instatus") or {}
+    page_url = data.status_page_url()
+    if ins.get("ok"):
+        status = str(ins.get("status") or "?").lower()
+        tone = {"resolved": "green", "monitoring": "teal", "identified": "orange", "investigating": "red"}.get(status, "gray")
+        comps = ", ".join(f"{h.e(c['name'])}: {h.e(str(c['status']).lower().replace('_', ' '))}" for c in ins["components"])
+        rows.append(row("Status page", "megaphone", h.badge(status, tone), comps, page_url, "Page"))
+    elif inc.instatus_incident_id or inc.public_posted:
+        rows.append(row("Status page", "megaphone", stored("resolved" if inc.resolved_at else "posted",
+                                                           "green" if inc.resolved_at else "purple"), "", page_url, "Page"))
+    else:
+        blocked = next((d for d in reversed(data.store.decisions(inc.id) if data.store else [])
+                        if d.intent == "instatus.create_incident" and d.result.value == "DENY"), None)
+        detail = (f"blocked by {', '.join(blocked.rules)}: {h.e(h.clean(blocked.explain))}" if blocked
+                  else "waiting for approval in Slack" if pub_p.get("subject") else "")
+        rows.append(row("Status page", "megaphone", h.badge("not posted", "gray"), detail))
+    # Sentry
+    sen = got.get("sentry") or {}
+    meta_links = [s["url"] for s in data.sentry_links(inc) if s["url"]]
+    if sen.get("ok"):
+        parts = []
+        for x in sen["issues"]:
+            tone = "green" if x["status"] == "resolved" else "red" if x["status"] == "unresolved" else "gray"
+            parts.append(f'<span class="nowrap">{h.e(x.get("short_id") or x["id"])} {h.badge(x["status"] or "unknown", tone)}'
+                         f' <span class="muted small">{h.e(x.get("count") or "?")} events</span></span>')
+        first = next((x["url"] for x in sen["issues"] if x.get("url")), None) or (meta_links[0] if meta_links else None)
+        rows.append(row("Sentry", "alert", " ".join(parts), "", first, "Issue"))
+    elif sentry_ids:
+        resolved = bool(data.sentry_resolved(inc))
+        rows.append(row("Sentry", "alert", stored("resolved" if resolved else "unresolved", "green" if resolved else "red"),
+                        f"{len(sentry_ids)} issue(s)", meta_links[0] if meta_links else None, "Issue"))
+    # PagerDuty (Events API only: its state is what the agent sent)
+    esc = data.escalation(inc)
+    if esc["pages"]:
+        reasons = "; ".join(h.e(h.clean(p.get("reason"))) for p in esc["pages"])
+        rows.append(row("PagerDuty", "x", h.badge("resolved", "green") if esc["resolved_at"] else h.badge("paged, open", "red"),
+                        reasons))
+    else:
+        rows.append(row("PagerDuty", "x", h.badge("not paged", "gray"),
+                        "pages on-call when approval times out, a fix fails or is blocked, or no safe fix exists"))
+    # GitHub
+    gh = got.get("github") or {}
+    if pr:
+        state = gh.get("state") if gh.get("ok") else pr.get("status")
+        tone = {"merged": "green", "open": "purple", "closed": "gray", "rejected": "gray"}.get(state, "gray")
+        detail = f"merged by {h.e(gh['merged_by'])}" if gh.get("merged_by") else h.e(pr.get("title", ""))
+        rows.append(row("GitHub", "book", f'PR #{pr["number"]} {h.badge(state or "unknown", tone)}', detail, pr.get("url"), "PR"))
+    else:
+        rows.append(row("GitHub", "book", h.badge("no runbook PR", "gray"),
+                        "opened after the incident closes, if the agent learned something"))
+
+    if got:
+        note = "Linear, status page, Sentry and GitHub are read live from each app (cached 15 s)."
+    elif live_on:
+        note = "Showing what the agent recorded; the apps could not be read just now."
+    else:
+        note = "Local sandbox: showing what the agent recorded."
+    return h.card("Across the apps", f'<ul class="apps">{"".join(rows)}</ul><p class="muted small apps-note">{note}</p>')
+
+
+def render_incident(data: ConsoleData, inc: Incident, live: LiveApps | None = None) -> str:
     proposal = data.kv(f"{inc.id}:proposal") or {}
     match = data.kv(f"{inc.id}:match") or {}
     diagnosis = data.kv(f"{inc.id}:diagnosis")
@@ -395,8 +524,10 @@ def render_incident(data: ConsoleData, inc: Incident) -> str:
         "No decisions", "Policy decisions are recorded before every write."))
 
     left = (h.card("Story", timeline) + fix_card + disc_html)
-    right = (h.card("Summary", summary) + h.card("Evidence", evidence_html) + h.card("Judgment", judgment) + diag_html)
-    return links_bar(data, inc) + f'<div class="grid-detail"><div>{left}</div><div>{right}</div></div>' + audit
+    right = (render_apps_panel(data, inc, live) + h.card("Summary", summary) + h.card("Evidence", evidence_html)
+             + h.card("Judgment", judgment) + diag_html)
+    return (render_status_banner(data, inc) + links_bar(data, inc)
+            + f'<div class="grid-detail"><div>{left}</div><div>{right}</div></div>' + audit)
 
 
 def render_wiki(data: ConsoleData) -> str:

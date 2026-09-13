@@ -176,3 +176,32 @@ main { padding: 28px 36px 60px; max-width: 1280px; width: 100%; }
 .diff .add { color: var(--green); background: var(--green-bg); display: block; }
 .diff .del { color: var(--red); background: var(--red-bg); display: block; }
 .diff .ctx { color: var(--text-2); display: block; }
+
+/* where things stand */
+.banner { display: flex; gap: 16px; align-items: center; justify-content: space-between; padding: 14px 18px;
+  border: 1px solid var(--border); border-left: 4px solid var(--gray); border-radius: var(--radius);
+  background: var(--panel); box-shadow: var(--shadow); margin-bottom: 14px; }
+.banner-red { border-left-color: var(--red); background: linear-gradient(90deg, var(--red-bg), var(--panel) 70%); }
+.banner-purple { border-left-color: var(--purple); background: linear-gradient(90deg, var(--purple-bg), var(--panel) 70%); }
+.banner-blue { border-left-color: var(--blue); background: linear-gradient(90deg, var(--blue-bg), var(--panel) 70%); }
+.banner-teal { border-left-color: var(--teal); background: linear-gradient(90deg, var(--teal-bg), var(--panel) 70%); }
+.banner-green { border-left-color: var(--green); background: linear-gradient(90deg, var(--green-bg), var(--panel) 70%); }
+.banner-orange { border-left-color: var(--orange); background: linear-gradient(90deg, var(--orange-bg), var(--panel) 70%); }
+.banner-kicker { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--text-3); font-weight: 600; }
+.banner-headline { font-size: 17px; font-weight: 650; margin: 3px 0 4px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.banner-detail { color: var(--text-2); max-width: 860px; }
+.banner-wait { display: flex; flex-direction: column; align-items: flex-end; text-align: right; white-space: nowrap; }
+.banner-wait strong { font-size: 13.5px; }
+/* across the apps */
+.apps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.app-row { display: flex; gap: 10px; align-items: flex-start; padding: 9px 0; border-bottom: 1px solid var(--border); }
+.app-row:last-child { border-bottom: 0; }
+.app-icon { width: 16px; height: 16px; color: var(--text-3); flex: none; margin-top: 3px; display: inline-flex; }
+.app-icon svg { width: 16px; height: 16px; }
+.app-body { flex: 1; min-width: 0; }
+.app-head { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.app-head strong { min-width: 84px; }
+.app-state { display: inline-flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.app-row > a { flex: none; margin-top: 2px; }
+.nowrap { white-space: nowrap; }
+.apps-note { margin: 10px 0 0; }
