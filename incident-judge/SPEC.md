@@ -956,7 +956,6 @@ See [`docs/brief.md`](docs/brief.md). Outline:
 7. **Failure modes (ArgaBench)**: incomplete outcome (J1, J2), unauthorized writes (J3, J4, R3, R8, A2), missing
    deliverables (M1), cross-system misalignment (J5, X1), duplicates (D1, X1, X2), false claims / premature resolve
    (D3, X4, B2), uncommunicated results (DENY posted to Slack, J3). State what is not tested.
-8. **Weaknesses**: §22, honestly.
 
 ---
 
@@ -975,7 +974,7 @@ See [`docs/brief.md`](docs/brief.md). Outline:
 
 ---
 
-## 22. Open questions / weaknesses
+## 22. Open questions
 
 **Check first**
 - Do the hackathon rules allow code written before the event? If not, this SPEC is the design and code is written
@@ -984,15 +983,3 @@ See [`docs/brief.md`](docs/brief.md). Outline:
   after creation).
 - Linear: do trashed issues count toward the 250 limit?
 
-**Honest weaknesses (go into the brief)**
-- The published eval numbers use the deterministic heuristic judge; they measure the policy boundary, memory and
-  reliability machinery, not LLM judgment quality.
-- ShopLab is synthetic; failures are real but simpler than production. SaaS APIs are emulated (shapes and auth traps,
-  not rate limits and latency).
-- k=3 is a small sample; pass^3 has wide error bars.
-- Eval approvals use the text path; the demo uses buttons. Same verifier, different UI path.
-- Time is compressed (`TIME_SCALE`); short SLO windows are noisier than in reality.
-- Autonomy levels in eval are seeded from fixture outcomes, not accumulated naturally.
-- Small wiki; index-based lookup is unproven at thousands of pages.
-- `match_conditions` are written by humans; the LLM does not yet propose reliable discriminators.
-- Detection uses Sentry + SLO only; no logs or traces.

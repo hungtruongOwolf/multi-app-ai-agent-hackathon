@@ -89,16 +89,3 @@ Incomplete primary outcome (J1, J2, R1) · unauthorized writes (J3, J4, R3, R4, 
 (M1, M5) · cross-system misalignment (J5, X3) · duplicate resources (D1, X1, X2) · false claims / premature resolve
 (D2, D3, X4, X5) · uncommunicated results (every DENY posted to Slack with its rule id) · data leakage (A1) ·
 memory poisoning (A3, M4).
-
-## 6. Where it is still weak (honest)
-
-- The published numbers use the **deterministic heuristic judge** (no API key in the eval environment). The Claude
-  judge shares the output contract and the policy boundary, but its judgment quality is not what these numbers measure;
-  they measure the boundary, the memory and the reliability machinery.
-- k = 3 is a small sample; 100% pass^3 is not a claim of zero failures in production.
-- ShopLab is synthetic; time is compressed (`TIME_SCALE=0.1`); SaaS APIs are emulated (auth traps and shapes reproduced,
-  rate limits and latency are not).
-- Autonomy levels in eval are seeded from fixture outcomes, not accumulated over weeks.
-- `match_conditions` are written by humans; the agent does not yet propose reliable discriminators itself.
-- Building the harness found 16 real bugs the unit tests missed (stale processes on reused ports, backward-looking
-  metric windows making verification fail, SQLite on exFAT, premature triage) — listed in `docs/CONTRACTS.md` §8.

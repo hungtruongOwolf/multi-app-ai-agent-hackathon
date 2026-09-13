@@ -32,7 +32,7 @@ the [main README](../README.md).
 | `judge/realapps.py` | `judge bootstrap` and `judge doctor` for the real apps |
 | `sandbox/` | Local emulators of the Sentry, Linear, Instatus and Slack API subsets (same request shapes) |
 | `evals/` | 30 scenarios, runner, simulated humans, graders (state, invariants, canaries), baselines, reports |
-| `tests/` | 294 unit and integration tests |
+| `tests/` | 299 unit and integration tests |
 
 ## Commands
 

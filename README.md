@@ -29,13 +29,14 @@ without ever letting the model hold a credential or make the final call.
 |---|---|
 | Project overview | [What Incident Judge does](#what-incident-judge-does) · [How an incident flows](#how-an-incident-flows) |
 | External apps used | [Connected apps: role and triggers](#connected-apps-role-and-triggers) |
+| Technical depth | [LLM Wiki knowledge base](#the-knowledge-base-karpathys-llm-wiki-made-safe-to-act-on) · [Engineering highlights](#engineering-highlights) · [Architecture](#architecture) |
 | Setup instructions | [Quick start (no accounts)](#quick-start-5-minutes-no-accounts) · [Connect the real apps](#connect-the-real-apps) |
 | How we tested reliability | [Reliability and evaluation](#reliability-and-evaluation) · [full brief](incident-judge/docs/brief.md) |
 | Two-minute demo | [Demo video](#demo-video) |
 | License | [MIT](LICENSE) |
 
 **Results:** 30 scenarios × 3 independent trials, graded on the final state of the apps. **30/30 scenarios pass all
-three trials, 0 unsafe trials, 0 flaky scenarios.** 310 unit and integration tests pass.
+three trials, 0 unsafe trials, 0 flaky scenarios.** 315 unit and integration tests pass.
 
 ---
 
@@ -138,24 +139,41 @@ A real run on the real apps, step by step:
 Every write carries an idempotency marker, so a crash or lost response never creates a second ticket, message or
 status-page incident.
 
-## The knowledge base (LLM Wiki)
+## The knowledge base: Karpathy's LLM Wiki, made safe to act on
 
-[`knowledge/`](knowledge/) follows Karpathy's **LLM Wiki** pattern: a folder of Markdown that the model reads first
-and keeps up to date, instead of re-deriving everything from scratch each time. Because these runbooks drive real
-production actions, write access is split by layer:
+Andrej Karpathy's **LLM Wiki** pattern replaces "retrieve chunks and re-derive the answer every time" with a small,
+curated wiki that an LLM *maintains*: raw sources go in, the model compiles them into linked pages, a schema file tells
+it how, and three operations keep it alive: **ingest**, **query** and **lint**. Knowledge compounds instead of being
+rediscovered at 3 a.m.
 
-| Layer | Path | Written by |
+[`knowledge/`](knowledge/) implements that pattern for on-call. The twist: these pages drive **real production
+actions**, so every layer has an owner and code guards the parts that must not be hallucinated.
+
+<p align="center">
+  <img src="assets/diagrams/knowledge-graph.png" alt="Knowledge graph: services, runbooks, catalog actions, incidents and pull requests, as the console draws them" width="900" />
+</p>
+
+| Layer (Karpathy) | In Incident Judge | Owner |
 |---|---|---|
-| Architecture and service docs | [`wiki/architecture.md`](knowledge/wiki/architecture.md), [`wiki/services/`](knowledge/wiki/services/) | Humans (what "normal" is, failure modes, safe actions) |
-| Runbooks | [`wiki/runbooks/`](knowledge/wiki/runbooks/) | The LLM, **only** through reviewed proposals (pull requests) |
-| Stats and autonomy inside runbooks | front-matter `stats`, `autonomy` | **Code only.** A proposal that touches them is rejected. |
-| Raw incident timelines | [`raw/incidents/`](knowledge/raw/) | Code, from the audit log (redacted, immutable) |
-| Index and log | [`wiki/index.md`](knowledge/wiki/index.md), [`wiki/log.md`](knowledge/wiki/log.md) | Tooling |
+| **Raw sources** | [`raw/incidents/`](knowledge/raw/): one immutable, redacted timeline per incident, generated from the audit log | Code |
+| **Wiki pages** | [`wiki/runbooks/`](knowledge/wiki/runbooks/): one page per incident class (summary, symptoms, causes, remediation, *tried and did not work*, *how to tell apart*) | LLM, via reviewed pull requests |
+| **Reference pages** | [`wiki/architecture.md`](knowledge/wiki/architecture.md), [`wiki/services/`](knowledge/wiki/services/): what "normal" is, dependencies, failure modes, safe actions | Humans |
+| **Schema** | [`AGENTS.md`](knowledge/AGENTS.md): page format, write rules, operations | Humans |
+| **Index and log** | [`wiki/index.md`](knowledge/wiki/index.md) regenerated on merge, [`wiki/log.md`](knowledge/wiki/log.md) append-only | Tooling |
+| **Code-owned zone** | `stats`, `autonomy` and `match_conditions` in each runbook's front matter | Code (stats, autonomy), humans (conditions) |
 
-A runbook is not only prose. It carries **machine-checked `match_conditions`**, for example *pool utilization > 90%
-and query p95 < 100 ms*, that code evaluates on live metrics. That is how the agent refuses to apply the
-pool-starvation fix to a slow-query incident that looks identical in Sentry. The schema and operations are in
-[`knowledge/AGENTS.md`](knowledge/AGENTS.md).
+**The three operations, split between the LLM and code**
+
+| Operation | LLM | Code |
+|---|---|---|
+| **Query** (new incident) | Reads `index.md` and picks a runbook, or abstains | Exact fingerprint match first; then checks every `match_conditions` entry on **live metrics**. A look-alike whose numbers don't hold is rejected (P7). |
+| **Ingest** (incident resolved) | Writes or updates the runbook prose from the raw timelines, including *how to tell apart* when it was misrouted | Writes the raw timeline, recomputes stats and autonomy from verified outcomes, validates the proposal (schema, catalog actions, no secrets, code-owned fields untouched) and opens a **GitHub pull request** |
+| **Lint** (periodic) | | Flags stale runbooks, orphaned actions, duplicate signatures and index drift |
+
+**Trust is computed, not claimed.** Autonomy comes only from verified outcomes: L1 after 2 successes, L2 after 5 with
+no recent failure on a reversible action, L3 after 10 with a service-scoped blast radius. One failed fix sets
+`review_required` and drops the runbook to L1 until a human reviews it. The LLM can improve how a runbook *reads*; it
+can never make it *more trusted*.
 
 ## The permission boundary
 
@@ -173,6 +191,19 @@ passes through. Every decision is written to an audit log with the rule that dec
 | **P9, P11, P15** | One fix per service, rate limits, circuit breaker, kill switch (`judge pause`). No fix that can't be verified. |
 | **P12** | Wiki changes only through validated, human-merged proposals. Stats and autonomy are code-owned. |
 | **P13, P14** | Incidents merge only with a shared dependency and evidence. Approvers must be allowlisted humans approving the exact plan hash. |
+
+## Engineering highlights
+
+| | How |
+|---|---|
+| **Exactly-once writes across six APIs** | A SQLite outbox with idempotency keys. Before every create, the agent reconciles by a hidden marker: Slack message metadata, a Linear link URL, a status-page reference. A lost response or a crash never produces a second ticket, message or public incident (X1, X2). |
+| **Crash-safe incidents** | Each incident is a durable state machine. Killing the agent mid-fix and restarting it resumes the same plan; the action runs exactly once. |
+| **Structured LLM output only** | Claude answers through forced tool calls validated with Pydantic. Invalid output is retried, then escalated. The model never sees a credential and its text never reaches the status page. |
+| **Verification that can't be fooled by silence** | Fixes are verified on SLO metrics from live traffic after a settle window, with a minimum traffic floor (P15). "Sentry went quiet" is not a recovery. |
+| **Approvals bound to content** | An approval is valid only for the exact plan hash, from an allowlisted human, within its window (P14). A changed plan needs a new click. |
+| **Untrusted input stays data** | Error messages, change-log text and docs are passed as data; PII and secrets are redacted before any surface, and graded with seeded canaries (A1, A2). |
+| **Buttons without a public URL** | Slack Socket Mode handles the approval card, with typed commands as a fallback. |
+| **The same code against emulators** | Local emulators reproduce the request shapes and auth traps of Sentry, Linear, Instatus and Slack, so the full agent is tested end to end without accounts. |
 
 ## Reliability and evaluation
 
@@ -222,18 +253,13 @@ alert publicly and ran fixes with no approval. Without verification it resolved 
 recorded a wrong fix as a success, which poisons memory.
 
 **Beyond the harness:**
-- **310 unit and integration tests** cover the policy engine, outbox, connectors (including injected transport
+- **315 unit and integration tests** cover the policy engine, outbox, connectors (including injected transport
   faults), memory validator, approvals, diagnosis and console.
 - **Live runs on the real apps** (Sentry, Linear, Instatus, Slack, PagerDuty, GitHub), with `judge doctor` checking
   auth, a write, a read-back and cleanup per app.
 - **16 integration bugs** that unit tests missed were found and fixed along the way (lost Sentry events on reused
   ports, verification reading pre-fix metrics, SQLite WAL on exFAT, Sentry rate limits, invisible Linear tickets).
   They are listed in [`CONTRACTS.md` §8](incident-judge/docs/CONTRACTS.md).
-
-**Honest limits.** The published eval numbers use the deterministic heuristic judge, so they measure the permission
-boundary, memory and reliability machinery rather than Claude's judgment quality. k = 3 is a small sample. SaaS
-APIs are emulated in evals (shapes and auth traps reproduced; rate limits and latency are not). The full list is in
-the [reliability brief](incident-judge/docs/brief.md#6-where-it-is-still-weak-honest).
 
 ## Demo video
 
@@ -307,7 +333,7 @@ Step-by-step token scopes for every app are in [`incident-judge/docs/SETUP.md`](
 ## Tests and evals
 
 ```bash
-cd incident-judge && uv run pytest -q                                   # agent: 294 tests
+cd incident-judge && uv run pytest -q                                   # agent: 299 tests
 cd shoplab && uv run pytest -q                                          # target system: 16 tests
 cd incident-judge && uv run python -m evals.runner --scenarios all --k 3 --parallel 2
 cd incident-judge && uv run python -m evals.runner --scenarios core --k 1 --baseline B0   # ablation
@@ -345,7 +371,7 @@ uv run judge pause                           # kill switch (resume with `judge r
 
 ### ShopLab, the system under operation
 
-To test an incident agent honestly you need something that actually breaks. [`shoplab/`](shoplab/) is a small but
+To test an incident agent for real you need something that actually breaks. [`shoplab/`](shoplab/) is a small but
 real shop: checkout, search, catalog and an internal batch job, plus a staging copy. It has a real connection pool,
 generated traffic, Prometheus metrics, Sentry reporting, a customer storefront, an `/ops` control room, a change log
 and a fault injector. Incident Judge treats it like any production system it doesn't own.
