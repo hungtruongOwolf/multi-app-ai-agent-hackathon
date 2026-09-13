@@ -146,6 +146,10 @@ class Agent:
         await self.linear_comment(inc, f"**Paged on-call via PagerDuty:** {reason}\n\n{md_link}", scope=f"paged:{key}")
 
     async def start(self) -> None:
+        # A diagnosis interrupted by a crash left "running" behind; nothing is running in this new process.
+        for inc in self.store.incidents():
+            if self.store.get_kv(f"{inc.id}:diagnosis_state") == "running":
+                self.store.put_kv(f"{inc.id}:diagnosis_state", None)
         await self._mirror_main("knowledge: sync on agent start")
         if getattr(self.d, "runner", None) is not None:
             self.d.runner.on_sample = self._narrate_sample
