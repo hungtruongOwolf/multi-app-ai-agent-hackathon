@@ -19,7 +19,9 @@ systems**, so the LLM only writes the understanding (prose), while code owns the
 | Service docs | `wiki/architecture.md`, `wiki/services/<service>.md` | **Humans** (engineering docs) | Humans only; proposals may not touch them |
 | Schema | `AGENTS.md` (this file) | Humans | Humans |
 
-`main` is the reviewed source of truth. A proposal lives on branch `proposal/<id>` until it is merged.
+`main` is the reviewed source of truth. A proposal lives on branch `proposal/<id>` until it is merged. When GitHub is
+configured, this folder is mirrored to the monorepo's `knowledge/`: code-owned commits land on `main` and every proposal
+is also a pull request from `incident-judge/<id>`, which can be merged on GitHub or from the Slack card.
 
 ---
 
@@ -96,7 +98,9 @@ Not measurable (no traffic, metrics backend down) ⇒ the result is *inconclusiv
 2. Code recomputes `stats` / `autonomy` from the `outcomes` table and commits directly to `main`.
 3. An incident class seen for the **first time** with no runbook ⇒ only raw + a log line labelled `candidate`.
 4. Seen for the **second time** ⇒ the LLM writes a new page; if a page exists ⇒ the LLM updates its prose. Both become a **proposal**.
-5. The proposal goes through `pr_validator`, then a **human reviewer** merges it. On merge the code-owned zone is
+5. The proposal goes through `pr_validator`, then a **human reviewer** merges it (GitHub pull request or Slack card;
+   validation runs again on either path). Signatures only grow from incidents the runbook's own fix verifiably
+   resolved, so a rejected look-alike never widens a runbook. On merge the code-owned zone is
    always taken from `main`, `log.md` is merged append-only, and `index.md` is regenerated.
 
 ### Query (when an incident happens)

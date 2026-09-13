@@ -41,16 +41,44 @@ three trials, 0 unsafe trials, 0 flaky scenarios.** 308 unit and integration tes
 
 ## Why this problem
 
-At 3 a.m. the on-call engineer has to answer four questions alone, fast, and with partial information:
+### The first 15 minutes of an incident are not spent fixing
+
+At 3 a.m. the on-call engineer is paged and has to answer four questions alone, fast, with partial information:
 
 1. **How bad is it?** A `CRITICAL` log line on staging matters less than eight customers who cannot pay.
-2. **Can customers see it?** If yes, the public status page must say so, but a wrong public post can't be taken back.
-3. **Is it one incident or three?** A slow database breaks checkout *and* search at once.
-4. **Have we fixed this before?** The fix is usually in someone's head, or in a runbook that no longer matches reality.
+2. **Can customers see it?** If yes, the status page must say so. But a wrong public post can't be taken back.
+3. **Is it one incident or three?** A slow database breaks checkout *and* search at the same time.
+4. **Have we fixed this before?** Usually yes. The fix lives in someone's head, in a Slack thread from last
+   quarter, or in a runbook that no longer matches reality.
 
-Existing tools do the plumbing (alerts, tickets, pages). The *judgment* and the *learning* are still manual.
-An LLM agent is good at judgment and writing, but you cannot let it post publicly, restart production or rewrite
-its own track record because it sounded confident. Incident Judge separates the two:
+The actual fix is often one config change. The time goes elsewhere:
+
+| Where the time goes | What it looks like |
+|---|---|
+| **Re-investigating a repeat** | The same flag, the same exhausted pool, the same bad deploy. Each recurrence is debugged from scratch because last time's reasoning was never written down in a findable place. |
+| **Jumping between six tools** | Sentry for the error, dashboards for the metrics, the change log for "what changed", Linear for the ticket, the status page for customers, Slack for the team, PagerDuty for escalation. Coordination is manual and easy to get wrong under pressure. |
+| **Onboarding in the middle of an outage** | A new engineer doesn't know which service owns `/pay`, what "normal" latency is, which fixes are safe to try, or who changed what. They either wait for a senior engineer or guess. |
+| **Look-alike incidents** | A slow query and an undersized connection pool produce the same `PoolTimeout` in Sentry. Applying last week's fix to this week's look-alike makes things worse. |
+| **Knowledge that decays** | Post-mortems are written late or never. Runbooks drift from the system they describe and nobody knows which ones are still trustworthy. |
+
+### What changes with Incident Judge
+
+| Before | With Incident Judge |
+|---|---|
+| Each repeat incident is re-investigated | A runbook whose conditions **hold on live metrics** proposes the fix with its track record ("4 verified successes, 0 failures"). One click, and it is verified on SLOs. |
+| Six tools, updated by hand | One Slack thread with the evidence, one approval card, and every app updated exactly once: Linear, status page, Sentry, PagerDuty, GitHub. |
+| New engineers need a senior to explain the system | The triage explains itself in plain language: which service, what is normal, what changed, why this cause, what exactly will change and how it rolls back. The knowledge base has a doc for every service. |
+| Look-alikes get the wrong fix | Runbooks carry machine-checked discriminators. The agent refuses the look-alike and diagnoses instead. |
+| Post-mortems written late, runbooks drift | The timeline is written by code at resolution. The runbook update arrives as a pull request. Stats and autonomy are recomputed from outcomes, so trust is earned and lost automatically. |
+
+In a live run on the real apps, a checkout outage went from first error to verified fix in **2 min 13 s**, with one
+human click.
+
+### Why not just give an LLM the keys?
+
+An LLM is good at reading evidence and explaining it, which is exactly the judgment and writing that on-call lacks.
+But an agent that sounds confident can post a false outage publicly, "fix" a look-alike, follow instructions hidden in
+an error message, or rewrite its own track record. Incident Judge splits the work:
 
 > **The LLM maintains understanding. Code holds the numbers and the permissions.**
 
@@ -68,23 +96,9 @@ its own track record because it sounded confident. Incident Judge separates the 
 
 ## How an incident flows
 
-```mermaid
-flowchart LR
-  A[ShopLab fails<br/>real errors + metrics] --> B[Sentry issue<br/>SLO burn]
-  B --> C[Triage<br/>severity · visibility · duplicates]
-  C --> D{Known failure?<br/>runbook conditions<br/>hold on live metrics}
-  D -- yes --> E[Runbook fix<br/>earned autonomy]
-  D -- no --> F[Diagnosis from docs,<br/>change log, metrics]
-  E --> G[Policy engine<br/>P1–P15, pure code]
-  F --> G
-  G -- needs approval --> H[Slack card<br/>Approve all · Fix only · Post only · Reject]
-  G -- deny --> P[Explain in Slack<br/>page on-call]
-  H --> I[Execute catalog action]
-  I --> J{Verify SLOs<br/>on live traffic}
-  J -- recovered --> K[Resolve: Instatus · Linear · PagerDuty]
-  J -- failed --> L[Roll back · demote runbook<br/>page on-call]
-  K --> M[Timeline + stats by code<br/>runbook PR by the LLM]
-```
+<p align="center">
+  <img src="assets/diagrams/incident-flow.png" alt="How an incident flows: signals, judgment, runbook or diagnosis, policy engine, one Slack card, execute, verify, resolve everywhere, learn" width="900" />
+</p>
 
 A real run on the real apps, step by step:
 
@@ -110,7 +124,7 @@ A real run on the real apps, step by step:
 
 | App | Role | What the agent does | When it is triggered |
 |---|---|---|---|
-| **Sentry** | Signal source | Reads unresolved issues and their latest event (production and staging projects). ShopLab services report errors with `sentry-sdk`. | Polled every tick (~2 s). A new or regressing issue opens or updates an incident. |
+| **Sentry** | Signal source | Reads unresolved issues and their latest event (production and staging projects), and marks the incident's issues resolved when it resolves. ShopLab services report errors with `sentry-sdk`. | Polled every tick (~2 s). A new or regressing issue opens or updates an incident. Resolved at incident resolve (`sentry.resolve_issue`), so a recurrence shows up as a regression. |
 | **SLO metrics** (ShopLab Prometheus) | Signal and verification | Burn-rate, latency and pool metrics for triage, runbook conditions and fix verification. | Every tick. Before a runbook may be used, after a fix (verification) and before resolve (P4). |
 | **Claude** (Anthropic) | Reasoning | `claude-sonnet-5` triages. `claude-opus-5` diagnoses, discusses, chooses runbooks and writes wiki proposals. Output is JSON; the model holds no credentials. | On every new incident, on material change (retriage), when no runbook matches, on each human reply in the thread, and after resolution. |
 | **Slack** | Human interface | Triage message, one bundled approval card with buttons (Socket Mode), live verification progress, discussion, final report. | Every incident. Buttons and replies are handled in real time; allowlisted approvers only (P14). |
@@ -282,8 +296,9 @@ The real SaaS APIs use the same request shapes as the emulators. Copy `incident-
 | GitHub | `GITHUB_TOKEN`, `GITHUB_REPO` | Runbook PRs against `knowledge/` (optional) |
 
 ```bash
-uv run judge bootstrap        # discovers or creates ids (Sentry DSNs, Linear team, Instatus components, Slack channel) into .env
-uv run judge doctor           # per app: auth, one write, read it back, clean up
+uv run judge bootstrap        # discovers or creates ids (Sentry DSNs, Linear team, Instatus components, Slack channel) into .env;
+                             # checks the PagerDuty key and GitHub repo access
+uv run judge doctor           # per app: auth, one write, read it back, clean up (PagerDuty: trigger + resolve; GitHub: push access)
 uv run judge dev              # same stack, now on the real apps
 ```
 
@@ -309,24 +324,9 @@ uv run judge pause                           # kill switch (resume with `judge r
 
 ## Architecture
 
-```mermaid
-flowchart TB
-  subgraph Signals
-    S1[Sentry] --- S2[SLO poller]
-  end
-  subgraph Agent[Incident Judge]
-    SM[Per-incident state machine<br/>SQLite outbox, resumable]
-    R[Reasoning<br/>Claude judge · diagnosis · discussion]
-    M[Memory<br/>LLM Wiki in git]
-    PE[Policy engine<br/>P1–P15]
-    EX[Executor<br/>only holder of credentials]
-    V[Verifier + rollback]
-  end
-  Signals --> SM --> R --> PE --> EX
-  M <--> R
-  EX --> V --> SM
-  EX --> Apps[Linear · Instatus · Slack · PagerDuty · GitHub · ShopLab]
-```
+<p align="center">
+  <img src="assets/diagrams/architecture.png" alt="Architecture: ShopLab and signals feed Incident Judge; reasoning and memory propose, the policy engine and executor decide and act on Slack, Linear, Instatus, PagerDuty and GitHub" width="900" />
+</p>
 
 | Path | Contents |
 |---|---|

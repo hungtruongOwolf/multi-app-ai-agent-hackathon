@@ -57,7 +57,10 @@ class RunbookQuery:
 
     async def find(self, incident: Incident, signals: list[Signal]) -> MatchResult:
         runbooks = {rb.id: rb for rb in self.repo.runbooks("main")}
-        fps = {s.fingerprint for s in signals} | {incident.incident_key}
+        # SLO burn signals are per service, not per failure class: every checkout outage burns the same SLO. They
+        # are symptoms for the judge, never an identity for runbook lookup.
+        slo_fps = {s.fingerprint for s in signals if s.source == "slo"}
+        fps = ({s.fingerprint for s in signals} | {incident.incident_key}) - slo_fps
 
         exact = sorted(
             (rb for rb in runbooks.values() if fps & set(rb.frontmatter.signatures.fingerprints)),

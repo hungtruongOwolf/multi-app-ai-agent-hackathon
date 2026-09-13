@@ -2,8 +2,8 @@
 id: checkout-payment-v2-flag
 title: Payment provider v2 flag breaks checkout
 signatures:
-  fingerprints: [6d269003861e, 7cadaf9d1b6a]
-  error_types: [ConnectionError, SLOBurn]
+  fingerprints: [6d269003861e]
+  error_types: [ConnectionError]
   services: [checkout]
 match_conditions:
 - {metric: error_rate, service: '{service}', op: '>', value: 0.05, window_s: 60}

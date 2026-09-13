@@ -64,14 +64,15 @@ class Ingestor:
             o = by_plan.get(e["plan_id"])
             actions.append({"plan_id": e["plan_id"], "action": e["action"], "params": json.loads(e["params"] or "{}"),
                             "service": e["service"], "result": o.result.value if o else None})
-        fingerprints = sorted({s.fingerprint for s in signals} | {incident.incident_key})
+        slo_fps = {s.fingerprint for s in signals if s.source == "slo"}
+        fingerprints = sorted(({s.fingerprint for s in signals} | {incident.incident_key}) - slo_fps)
         return {
             "incident_id": incident.id,
             "incident_key": incident.incident_key,
             "fingerprints": fingerprints,
             "environment": incident.environment.value,
             "services": list(incident.services),
-            "error_types": sorted({s.error_type for s in signals if s.error_type}),
+            "error_types": sorted({s.error_type for s in signals if s.error_type and s.source != "slo"}),
             "severity": incident.severity.value if incident.severity else None,
             "customer_impact": incident.customer_impact.value if incident.customer_impact else None,
             "runbook_id": incident.runbook_id,

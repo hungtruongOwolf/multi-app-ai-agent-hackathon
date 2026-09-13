@@ -2,8 +2,8 @@
 id: db-pool-starved
 title: DB connection pool starved
 signatures:
-  fingerprints: [1664c5cb4162, 360e61b8092b, 6fa92379e860, 7cadaf9d1b6a, b610cf7dfe66]
-  error_types: [PoolTimeout, SLOBurn, TimeoutError]
+  fingerprints: [1664c5cb4162, b610cf7dfe66]
+  error_types: [PoolTimeout]
   services: [catalog, checkout]
 match_conditions:
 - {metric: pool_utilization, service: '{service}', op: '>', value: 0.9, window_s: 60}
