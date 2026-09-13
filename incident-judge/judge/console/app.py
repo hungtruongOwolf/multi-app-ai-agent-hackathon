@@ -273,7 +273,8 @@ def render_apps_panel(data: ConsoleData, inc: Incident, live: LiveApps | None) -
                          if s.source == "sentry" and s.external_id})
     pr = data.runbook_pr(inc)
     live_on = bool(live is not None and live.enabled())
-    got = live.fetch(inc, sentry_ids, pr.get("number") if pr else None) if live_on else {}
+    got = live.fetch(inc, sentry_ids, pr.get("number") if pr else None,
+                     bool(data.kv(f"{inc.id}:paged"))) if live_on else {}
 
     def row(app: str, icon: str, state_html: str, detail: str = "", link: str | None = None, link_text: str = "Open") -> str:
         a = (f'<a href="{h.e(link)}" target="_blank" rel="noopener" class="small">{h.e(link_text)} ↗</a>'
@@ -347,12 +348,25 @@ def render_apps_panel(data: ConsoleData, inc: Incident, live: LiveApps | None) -
         resolved = bool(data.sentry_resolved(inc))
         rows.append(row("Sentry", "alert", stored("resolved" if resolved else "unresolved", "green" if resolved else "red"),
                         f"{len(sentry_ids)} issue(s)", meta_links[0] if meta_links else None, "Issue"))
-    # PagerDuty (Events API only: its state is what the agent sent)
+    # PagerDuty: live from the REST API when a read-only key is set, otherwise what the agent sent
     esc = data.escalation(inc)
     if esc["pages"]:
         reasons = "; ".join(h.e(h.clean(p.get("reason"))) for p in esc["pages"])
-        rows.append(row("PagerDuty", "x", h.badge("resolved", "green") if esc["resolved_at"] else h.badge("paged, open", "red"),
-                        reasons))
+        pdl = got.get("pagerduty") or {}
+        stored_pd = data.kv(f"{inc.id}:pd_incident") or {}
+        sub = (data.s.pagerduty_subdomain or "").strip()
+        pd_link = pdl.get("url") or stored_pd.get("url") or (f"https://{sub}.pagerduty.com/incidents" if sub
+                                                             else "https://app.pagerduty.com/incidents")
+        if pdl.get("ok"):
+            tone = {"triggered": "red", "acknowledged": "orange", "resolved": "green"}.get(pdl.get("status"), "gray")
+            who = ", ".join(a for a in pdl.get("assignees") or [] if a)
+            state_html = f'#{h.e(pdl.get("number"))} {h.badge(pdl.get("status") or "?", tone)}'
+            detail = reasons + (f" · assigned to {h.e(who)}" if who else "")
+        else:
+            state_html = h.badge("resolved", "green") if esc["resolved_at"] else h.badge("paged, open", "red")
+            detail = reasons
+        rows.append(row("PagerDuty", "x", state_html, detail, pd_link,
+                        f"Incident #{pdl.get('number') or stored_pd.get('number')}" if (pdl.get("number") or stored_pd.get("number")) else "Incidents"))
     else:
         rows.append(row("PagerDuty", "x", h.badge("not paged", "gray"),
                         "pages on-call when approval times out, a fix fails or is blocked, or no safe fix exists"))

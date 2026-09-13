@@ -38,24 +38,25 @@ class LiveApps:
     def enabled(self) -> bool:
         return self.s.backend == "real"
 
-    def fetch(self, inc: Incident, sentry_ids: list[str], pr_number: int | None) -> dict[str, dict]:
+    def fetch(self, inc: Incident, sentry_ids: list[str], pr_number: int | None, paged: bool = False) -> dict[str, dict]:
         """{app: {"ok": bool, ...fields}}; apps that are not configured or can't be read are absent or ok=False."""
         if not self.enabled():
             return {}
-        key = f"{inc.id}:{inc.linear_issue_id}:{inc.instatus_incident_id}:{','.join(sentry_ids)}:{pr_number}"
+        key = f"{inc.id}:{inc.linear_issue_id}:{inc.instatus_incident_id}:{','.join(sentry_ids)}:{pr_number}:{paged}"
         with self._lock:
             hit = self._cache.get(key)
             if hit and time.monotonic() - hit[0] < self.ttl_s:
                 return hit[1]
         try:
-            result = asyncio.run(self._fetch_all(inc, sentry_ids, pr_number))
+            result = asyncio.run(self._fetch_all(inc, sentry_ids, pr_number, paged))
         except Exception:  # never break the page because an app is slow or down
             result = {}
         with self._lock:
             self._cache[key] = (time.monotonic(), result)
         return result
 
-    async def _fetch_all(self, inc: Incident, sentry_ids: list[str], pr_number: int | None) -> dict[str, dict]:
+    async def _fetch_all(self, inc: Incident, sentry_ids: list[str], pr_number: int | None,
+                         paged: bool = False) -> dict[str, dict]:
         from judge.connectors.transport import HttpClient
 
         s = self.s
@@ -69,6 +70,8 @@ class LiveApps:
                 jobs["sentry"] = self._sentry(http, sentry_ids)
             if pr_number and s.github_token and s.github_memory_repo:
                 jobs["github"] = self._github(http, pr_number)
+            if paged and s.pagerduty_api_token:
+                jobs["pagerduty"] = self._pagerduty(http, inc.id)
             if not jobs:
                 return {}
             names = list(jobs)
@@ -101,6 +104,12 @@ class LiveApps:
                    "url": g.get("permalink")} if isinstance(g, dict) else {"id": i, "status": None}
                   for i, g in zip(issue_ids, got)]
         return {"ok": any(x["status"] for x in issues), "issues": issues}
+
+    async def _pagerduty(self, http, incident_id: str) -> dict:
+        from judge.connectors.pagerduty import PagerDutyClient
+
+        found = await PagerDutyClient(self.s, http).find_incident(f"ij-{incident_id}")
+        return {"ok": bool(found), **(found or {})}
 
     async def _github(self, http, number: int) -> dict:
         from judge.connectors.github import GitHubClient

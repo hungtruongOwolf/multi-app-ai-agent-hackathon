@@ -124,8 +124,26 @@ class Agent:
         self.store.put_kv(f"{inc.id}:paged", True)
         self.store.put_kv(f"{inc.id}:pages", (self.store.get_kv(f"{inc.id}:pages") or []) +
                           [{"at": now().isoformat(), "reason": reason, "key": key}])
-        await self.note(inc, f":pager: *Paged on-call via PagerDuty* — {reason}", key=f"paged:{key}")
-        await self.linear_comment(inc, f"**Paged on-call via PagerDuty:** {reason}", scope=f"paged:{key}")
+        found = None
+        for _ in range(3):  # PagerDuty creates the incident asynchronously after accepting the event
+            try:
+                found = await pd.find_incident(f"ij-{inc.id}")
+            except Exception as e:
+                log.warning("PagerDuty lookup failed: %r", e)
+                break
+            if found:
+                self.store.put_kv(f"{inc.id}:pd_incident", found)
+                break
+            await asyncio.sleep(1.5)
+        if found and found.get("url"):
+            who = ", ".join(a for a in found.get("assignees") or [] if a)
+            slack_link = f"<{found['url']}|PagerDuty incident #{found.get('number')}>" + (f" (assigned to {who})" if who else "")
+            md_link = f"[PagerDuty incident #{found.get('number')}]({found['url']})" + (f", assigned to {who}" if who else "")
+        else:
+            slack_link = f"<{pd.incidents_url}|open PagerDuty incidents>"
+            md_link = f"[open PagerDuty incidents]({pd.incidents_url})"
+        await self.note(inc, f":pager: *Paged on-call via PagerDuty* — {reason}\n{slack_link}", key=f"paged:{key}")
+        await self.linear_comment(inc, f"**Paged on-call via PagerDuty:** {reason}\n\n{md_link}", scope=f"paged:{key}")
 
     async def start(self) -> None:
         await self._mirror_main("knowledge: sync on agent start")

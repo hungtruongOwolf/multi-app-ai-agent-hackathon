@@ -25,7 +25,7 @@ def _env(name: str, default: str = "") -> str:
 SANDBOX_IDENTITY = dict(
     sentry_org="shoplab", sentry_token="sandbox",
     sentry_projects={"production": "shoplab-prod", "staging": "shoplab-staging"},
-    linear_api_key="sandbox", linear_team_id="team_shoplab", linear_eval_label_id="label_ij_eval", linear_assignee_id="", pagerduty_routing_key="",
+    linear_api_key="sandbox", linear_team_id="team_shoplab", linear_eval_label_id="label_ij_eval", linear_assignee_id="", pagerduty_routing_key="", pagerduty_api_token="", pagerduty_subdomain="",
     instatus_api_key="sandbox", instatus_page_id="page_shoplab",
     slack_bot_token="xoxb-sandbox", slack_app_token="", slack_oncall_channel="C_ONCALL",
     github_token="", github_memory_repo="",
@@ -80,6 +80,8 @@ class Settings(BaseModel):
     linear_eval_label_id: str = ""
     linear_assignee_id: str = ""
     pagerduty_routing_key: str = ""
+    pagerduty_api_token: str = ""   # optional, read-only REST key: links and live status of the PagerDuty incident
+    pagerduty_subdomain: str = ""   # e.g. "acme" for https://acme.pagerduty.com
     # instatus
     instatus_api_key: str = ""
     instatus_page_id: str = ""
@@ -153,6 +155,8 @@ class Settings(BaseModel):
             linear_eval_label_id=_env("LINEAR_EVAL_LABEL_ID", "label_ij_eval"),
             linear_assignee_id=_env("LINEAR_ASSIGNEE_ID", ""),
             pagerduty_routing_key=_env("PAGERDUTY_ROUTING_KEY", ""),
+            pagerduty_api_token=_env("PAGERDUTY_API_TOKEN", ""),
+            pagerduty_subdomain=_env("PAGERDUTY_SUBDOMAIN", ""),
             instatus_api_key=_env("INSTATUS_API_KEY", "sandbox"),
             instatus_page_id=_env("INSTATUS_PAGE_ID", "page_shoplab"),
             instatus_should_publish=_env("INSTATUS_SHOULD_PUBLISH", "false").lower() == "true",

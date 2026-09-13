@@ -46,6 +46,35 @@ class PagerDutyClient:
             "links": links or [],
         })
 
+    @property
+    def web_url(self) -> str:
+        sub = (self.s.pagerduty_subdomain or "").strip()
+        return f"https://{sub}.pagerduty.com" if sub else "https://app.pagerduty.com"
+
+    @property
+    def incidents_url(self) -> str:
+        return f"{self.web_url}/incidents"
+
+    async def find_incident(self, dedup_key: str) -> dict | None:
+        """The PagerDuty incident behind a dedup key (REST API, needs a read-only API key): number, link, status and
+        who it is assigned to. None when no key is configured or the incident isn't created yet."""
+        if self.s.backend != "real" or not self.s.pagerduty_api_token:
+            return None
+        resp = await self.http.request(APP, "find_incident", "GET", "https://api.pagerduty.com/incidents",
+                                       params=[("incident_key", dedup_key), ("statuses[]", "triggered"),
+                                               ("statuses[]", "acknowledged"), ("statuses[]", "resolved"),
+                                               ("date_range", "all")],
+                                       headers={"Authorization": f"Token token={self.s.pagerduty_api_token}",
+                                                "Accept": "application/vnd.pagerduty+json;version=2"})
+        data = check(APP, "find_incident", resp)
+        items = (data or {}).get("incidents") or []
+        if not items:
+            return None
+        i = items[0]
+        return {"number": i.get("incident_number"), "url": i.get("html_url"), "status": i.get("status"),
+                "title": i.get("title"), "service": (i.get("service") or {}).get("summary"),
+                "assignees": [(a.get("assignee") or {}).get("summary") for a in i.get("assignments") or []]}
+
     async def resolve(self, dedup_key: str) -> str:
         return await self._enqueue("resolve", {"routing_key": self.s.pagerduty_routing_key,
                                                "event_action": "resolve", "dedup_key": dedup_key})

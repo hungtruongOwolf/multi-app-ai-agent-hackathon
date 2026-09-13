@@ -20,6 +20,10 @@ for key, value in {
     "SENTRY_DSN_PROD": "",
     "SENTRY_DSN_STAGING": "",
     "SLACK_APP_TOKEN": "",
+    "INSTATUS_SHOULD_PUBLISH": "false",
+    "PAGERDUTY_ROUTING_KEY": "",
+    "PAGERDUTY_API_TOKEN": "",
+    "GITHUB_TOKEN": "",
     "INSTATUS_COMPONENTS": "",
 }.items():
     os.environ[key] = value

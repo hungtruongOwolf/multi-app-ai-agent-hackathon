@@ -76,7 +76,7 @@ class FakeLive(LiveApps):
     def enabled(self) -> bool:
         return True
 
-    def fetch(self, inc, sentry_ids, pr_number):
+    def fetch(self, inc, sentry_ids, pr_number, paged=False):
         return {"linear": {"ok": True, "identifier": "INC-9", "state": "Done", "state_type": "completed",
                            "assignee": "On Call", "url": "https://linear.app/x/INC-9"},
                 "instatus": {"ok": True, "status": "RESOLVED", "components": [{"name": "Checkout", "status": "OPERATIONAL"}]},
