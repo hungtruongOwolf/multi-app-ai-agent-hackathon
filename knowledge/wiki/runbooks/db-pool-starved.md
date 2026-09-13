@@ -13,12 +13,12 @@ action:
   params: {size: 20}
 # ---- code-owned zone — an LLM proposal that touches this is rejected ----
 stats:
-  success: 3
+  success: 4
   failure: 0
   inconclusive: 0
   failure_since_review: 0
-  last_verified: '2026-09-12T20:26:44.134692Z'
-  recent: [success, success, success]
+  last_verified: '2026-09-13T20:57:41.349751Z'
+  recent: [success, success, success, success]
 autonomy: {level: L1, cap: L2, review_required: false}
 ---
 
