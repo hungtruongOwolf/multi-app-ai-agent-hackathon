@@ -1,7 +1,7 @@
 # Incident Judge — System & Reliability Brief
 
 **One line:** an on-call agent that judges incidents (severity, customer visibility, same root cause, known fix),
-acts across Sentry · Linear · Instatus · Slack · a git-backed runbook wiki, and fixes known failures only with
+acts across Sentry · Linear · Instatus · Slack · PagerDuty · GitHub (a git-backed runbook wiki), and fixes known failures only with
 autonomy it has *earned* — and loses on the first failed fix.
 
 **LLM proposes, code decides. The LLM maintains understanding; code holds the numbers and the permissions.**
@@ -15,6 +15,8 @@ autonomy it has *earned* — and loses on the first failed fix.
 | Instatus | Public status page — the surface where a mistake is irreversible |
 | Slack | The incident thread: evidence, one approval card with buttons (Socket Mode), live verification, discussion, report |
 | Git wiki (Karpathy's LLM Wiki) | Service docs + architecture (what "normal" is, failure modes, safe actions), runbooks (LLM prose via reviewed proposals; stats/autonomy code-owned), code-written raw timelines, index, log |
+| PagerDuty | Escalation: pages on-call when nobody approves in time, a fix fails verification, or a SEV1/2 has no safe fix; one PD incident per incident (dedup key), auto-resolved |
+| GitHub | The wiki is mirrored to `knowledge/` in the monorepo: every runbook update is a real pull request (merge on GitHub *or* from the Slack card — validation runs either way); timelines and code-owned stats are committed to `main` |
 | Claude | Triage judge, diagnosis, discussion, wiki chooser/writer — all behind the policy engine |
 
 Per incident: durable state machine (SQLite outbox, resumable) → gather measured context → runbook lookup

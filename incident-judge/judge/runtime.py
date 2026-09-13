@@ -89,6 +89,16 @@ async def build_agent(settings: Settings | None = None, config: Config | None = 
     )
     log.info("agent built: backend=%s judge=%s trial=%s baseline=%s time_scale=%s", settings.backend,
              deps.judge.name, settings.trial_id, deps.baseline, settings.time_scale)
+    from judge.connectors.pagerduty import PagerDutyClient
+
+    deps.extras["pagerduty"] = PagerDutyClient(settings, http)
+    if settings.backend == "real" and settings.github_token and settings.github_memory_repo:
+        from judge.connectors.github import GitHubClient
+        from judge.memory.github_mirror import GitHubMirror
+
+        deps.extras["github"] = GitHubMirror(repo, GitHubClient(settings.github_token, settings.github_memory_repo, http))
+        log.info("knowledge base mirrored to GitHub %s (wiki proposals become pull requests)",
+                 settings.github_memory_repo)
     agent = Agent(deps)
     if settings.backend == "real" and settings.slack_app_token:
         from judge.approvals.slack_socket import SocketApprovals

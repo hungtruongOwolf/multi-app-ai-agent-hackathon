@@ -91,7 +91,42 @@ class Agent:
 
     # ================================================================ loop
 
+    async def _mirror_main(self, message: str) -> None:
+        mirror = self.d.extras.get("github")
+        if mirror is None:
+            return
+        try:
+            await mirror.sync_main(message)
+        except Exception as e:
+            log.warning("GitHub knowledge sync failed: %r", e)
+
+    async def page(self, inc: Incident, reason: str, key: str) -> None:
+        """Wake a human through PagerDuty when the agent should not (or cannot) decide. One PD incident per
+        Incident Judge incident (dedup_key); resolved automatically when the incident resolves."""
+        pd = self.d.extras.get("pagerduty")
+        if pd is None or not pd.enabled or self.store.get_kv(f"{inc.id}:paged:{key}"):
+            return
+        info = self.store.get_kv(f"{inc.id}:linear") or {}
+        links = [{"href": "http://127.0.0.1:8700/incidents/" + inc.id, "text": "Incident Judge console"}]
+        if info.get("url"):
+            links.append({"href": info["url"], "text": f"Linear {info.get('identifier')}"})
+        dec = self.decide(Intent(kind="pagerduty.trigger", incident_id=inc.id, payload={"scope": key}), self.pctx(inc))
+        if not dec.allowed:
+            return
+        try:
+            await pd.trigger(f"ij-{inc.id}", f"[{inc.severity or 'SEV?'}] {', '.join(inc.services)}: {reason}",
+                             (inc.severity.value if inc.severity else "SEV2"), ", ".join(inc.services),
+                             {"incident": inc.id, "state": inc.state.value, "reason": reason}, links)
+        except Exception as e:
+            log.warning("PagerDuty trigger failed: %r", e)
+            return
+        self.store.put_kv(f"{inc.id}:paged:{key}", now().isoformat())
+        self.store.put_kv(f"{inc.id}:paged", True)
+        await self.note(inc, f":pager: *Paged on-call via PagerDuty* — {reason}", key=f"paged:{key}")
+        await self.linear_comment(inc, f"**Paged on-call via PagerDuty:** {reason}", scope=f"paged:{key}")
+
     async def start(self) -> None:
+        await self._mirror_main("knowledge: sync on agent start")
         if getattr(self.d, "runner", None) is not None:
             self.d.runner.on_sample = self._narrate_sample
             self.d.runner.on_applied = self._narrate_applied
@@ -714,6 +749,7 @@ class Agent:
                                        explain="approval timed out; safe default is not posting publicly")
                     self.store.add_decision(timeout)
                     self.store.put_kv(f"{inc.id}:public_closed", True)
+                    await self.page(inc, "nobody approved the public status page post in time", "public-timeout")
                     await self.note(inc, "Approval timed out: NOT posting to the status page (safe default).",
                                     key="public-timeout")
         else:
@@ -955,6 +991,7 @@ class Agent:
                                              result=DecisionResult.DENY, rules=["P8"],
                                              explain="approval timed out; safe default is not executing"))
             await self.note(inc, "Fix approval timed out: NOT executing.", key="fix-timeout")
+            await self.page(inc, "nobody approved the proposed fix in time; the incident is still open", "fix-timeout")
             self.store.transition(inc, IncidentState.ESCALATED)
 
     async def veto_window(self, inc: Incident) -> None:
@@ -1049,6 +1086,8 @@ class Agent:
             rb ="rolled back" if result.rolled_back else "could not roll back (action is not reversible)"
             await self.note(inc, f":rotating_light: Verification {result.verify} for `{plan.action}` — {rb}. Runbook autonomy "
                                  f"demoted. On-call needs to take over.", key=f"verify-fail:{plan.plan_id}")
+            await self.page(inc, f"the fix `{plan.action}` did not recover the SLOs ({rb}); a human needs to take over",
+                            f"verify-fail:{plan.plan_id}")
             waiting = self.store.get_kv(f"{inc.id}:alt_after_failure")
             if waiting:
                 from judge.reasoning.discuss import AlternativeFix
@@ -1245,6 +1284,9 @@ class Agent:
         await self.note(inc, text, key="diagnosis")
         await self.linear_comment(inc, text.replace("*", "**"), scope="diagnosis")
         fix = data.get("recommended_fix")
+        if not fix and inc.severity and inc.severity.rank <= 2:
+            await self.page(inc, f"no safe automatic fix for this failure — {data.get('summary', '')[:200]}",
+                            "no-safe-fix")
         if not fix or self.store.active_plan(inc.id):
             return
         from judge.core.models import ActionProposal
@@ -1312,6 +1354,13 @@ class Agent:
         await self.note(inc, ":large_green_circle: *Status: resolved.* No errors for the quiet window and SLOs are healthy. "
                              "Status page and Linear were updated. *Next:* the agent writes what it learned to the runbook wiki.",
                         key="resolved")
+        pd = self.d.extras.get("pagerduty")
+        if pd is not None and pd.enabled and self.store.get_kv(f"{inc.id}:paged"):
+            try:
+                await pd.resolve(f"ij-{inc.id}")
+                await self.note(inc, ":pager: PagerDuty incident resolved.", key="paged-resolved")
+            except Exception as e:
+                log.warning("PagerDuty resolve failed: %r", e)
         inc = self.store.get_incident(inc.id)
         inc.resolved_at = now()
         self.store.transition(inc, IncidentState.RESOLVED)
@@ -1350,6 +1399,7 @@ class Agent:
                     await self._handle_proposal(inc, proposal)
             except Exception:
                 log.exception("memory ingest failed for %s", inc.id)
+        await self._mirror_main("knowledge: incident timeline")
         self.store.transition(inc, IncidentState.CLOSED)
 
     async def _handle_proposal(self, inc: Incident, proposal) -> None:
@@ -1370,9 +1420,21 @@ class Agent:
             return
         from judge.approvals.response_card import CardItem, build_card
 
+        pr_line = []
+        mirror = self.d.extras.get("github")
+        if mirror is not None:
+            try:
+                await self._mirror_main("knowledge: incident timeline and stats")
+                pr = await mirror.open_pr(proposal, f"{inc.severity} {', '.join(inc.services)} incident",
+                                          "Slack: the incident thread in the on-call channel.")
+                pr_line = [f"Review on GitHub: <{pr['url']}|pull request #{pr['number']}> (merge there or here)"]
+                await self.linear_comment(inc, f"**Runbook update proposed:** [GitHub PR #{pr['number']}]({pr['url']})",
+                                          scope=f"pr:{proposal.id}")
+            except Exception as e:
+                log.warning("GitHub PR for proposal failed: %r", e)
         text, blocks = build_card(inc, [CardItem(
             "memory_merge", proposal.hash, f"Update the runbook wiki: `{proposal.title}`",
-            [f"Files: {', '.join(proposal.files)}",
+            [*pr_line, f"Files: {', '.join(proposal.files)}",
              "Validated automatically: schema, required sections, no secrets, stats/autonomy untouched by the LLM",
              "Merging changes what the agent knows next time; it does not change any system now"])],
             oncall=self.c.policy.oncall_allowlist, timeout_min=60 * 24,
@@ -1398,6 +1460,28 @@ class Agent:
             await self.d.approval_poller.poll(inc, "memory_merge", proposal.hash, item["ts"], channel=self.s.slack_oncall_channel)
             approvals = [a for a in self.store.approvals(inc.id, "memory_merge") if a.subject_hash == proposal.hash]
             valid = next((a for a in reversed(approvals) if a.valid), None)
+            mirror = self.d.extras.get("github")
+            if valid is None and mirror is not None:
+                try:
+                    merged = await mirror.merged_on_github(proposal.id)
+                    if merged:
+                        errors = validate_proposal(self.d.repo, proposal, self.c)
+                        if errors:
+                            await self.note(inc, f"The PR was merged on GitHub but failed validation locally ({errors[0]}); "
+                                                 "the agent keeps its previous knowledge.", key=f"gh-invalid:{proposal.id}")
+                        else:
+                            self.d.repo.merge_proposal(proposal.id)
+                            self._sync_stats()
+                            await self._mirror_main(f"knowledge: {proposal.title}")
+                            await self.note(inc, f":books: Runbook update merged on GitHub by {merged.get('merged_by')}. "
+                                                 "The agent will use it from the next incident.",
+                                            key=f"mem-merged:{proposal.id}")
+                        continue
+                    if await mirror.closed_on_github(proposal.id):
+                        self.d.repo.reject_proposal(proposal.id, "closed on GitHub")
+                        continue
+                except Exception as e:
+                    log.warning("GitHub PR status check failed: %r", e)
             if valid is None:
                 keep.append(item)
                 continue
@@ -1408,10 +1492,22 @@ class Agent:
             if dec.allowed:
                 self.d.repo.merge_proposal(proposal.id)
                 self._sync_stats()
-                await self.note(inc, f"Merged wiki proposal {proposal.id} (approved by <@{valid.user_id}>).",
+                pr = mirror.pr_for(proposal.id) if mirror is not None else None
+                if mirror is not None:
+                    try:
+                        await mirror.merge(proposal.id, proposal.title)
+                    except Exception as e:
+                        log.warning("GitHub merge failed: %r", e)
+                where = f" and merged <{pr['url']}|PR #{pr['number']}> on GitHub" if pr else ""
+                await self.note(inc, f":books: Runbook update merged (approved by {await self._person(valid.user_id)}){where}.",
                                 key=f"mem-merged:{proposal.id}")
             elif valid.verdict == "reject":
                 self.d.repo.reject_proposal(proposal.id, f"rejected by {valid.user_id}")
+                if mirror is not None:
+                    try:
+                        await mirror.reject(proposal.id, f"rejected in Slack by {await self._person(valid.user_id)}")
+                    except Exception:
+                        pass
             else:
                 keep.append(item)
         self.store.put_kv("memory_pending", keep)

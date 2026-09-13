@@ -53,12 +53,16 @@ class GitHubMirror:
         base = state.get("mirrored_sha")
         if base == head:
             return None
-        rng = f"{base}..{head}" if base else head
-        names = self.repo._git("diff", "--name-only", rng) if base else \
-            self.repo._git("ls-tree", "-r", "--name-only", head)
+        if base is None:
+            # First run for this memory: the monorepo's knowledge/ is the reviewed baseline. Mirror from here on
+            # instead of overwriting it with a fresh (possibly runbook-less) runtime copy.
+            state["mirrored_sha"] = head
+            self._save(state)
+            return None
+        names = self.repo._git("diff", "--name-only", f"{base}..{head}")
         files: dict[str, str | None] = {}
         for rel in (n.strip() for n in names.splitlines() if n.strip()):
-            if rel.startswith((".", "AGENTS.md")) and rel != "AGENTS.md":
+            if rel.startswith("."):
                 continue
             local = self.repo.read(rel)
             remote = await self.gh.read_file(self.prefix + rel)

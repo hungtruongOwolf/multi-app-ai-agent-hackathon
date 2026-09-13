@@ -1,8 +1,8 @@
 # Incident Judge
 
 An on-call agent that **judges** incidents — how severe, whether customers can see it, whether it shares a root cause
-with something already open, and whether we have fixed it before — then acts across Sentry, Linear, Instatus, Slack
-and a git-backed runbook wiki. Known failures can be fixed automatically, but only with autonomy the runbook has
+with something already open, and whether we have fixed it before — then acts across Sentry, Linear, Instatus, Slack,
+PagerDuty and GitHub (the runbook wiki is mirrored as pull requests). Known failures can be fixed automatically, but only with autonomy the runbook has
 **earned** through verified outcomes, and that autonomy is lost on the first failed fix.
 
 > **The LLM proposes, code decides. The LLM maintains understanding; code holds the numbers and the permissions.**
@@ -21,6 +21,8 @@ and a git-backed runbook wiki. Known failures can be fixed automatically, but on
 | **ShopLab store** http://127.0.0.1:8800 | A real shop; when checkout breaks you see what customers see |
 | **ShopLab control room** http://127.0.0.1:8800/ops | Inject faults, live service health, change log (who changed what, when) |
 | **Linear** | One ticket per incident: summary, impact, evidence table, diagnosis, plan; a comment per decision |
+| **PagerDuty** | A page when a human must take over: approval timed out, fix failed verification, SEV1/2 with no safe fix |
+| **GitHub** | Runbook updates as pull requests against `knowledge/` in the monorepo; merge there or from Slack |
 | **Status page** (Instatus) | Template-only public updates: investigating → identified → monitoring → resolved |
 
 ## How it reasons
@@ -33,7 +35,7 @@ and a git-backed runbook wiki. Known failures can be fixed automatically, but on
 3. **Discussion** — reply in the thread: ask "why?" and get an answer grounded in evidence and docs; propose your own
    fix ("roll back to 1.4.1") and it becomes a concrete, verifiable plan card credited to you.
 4. **Learning** — after resolution the raw timeline is written by code, stats and autonomy are recomputed by code, and
-   the LLM proposes a runbook update that a human merges from Slack.
+   the LLM proposes a runbook update — a GitHub pull request that a human merges on GitHub or from Slack.
 
 ## Results
 

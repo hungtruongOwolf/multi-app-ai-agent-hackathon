@@ -28,6 +28,7 @@ SANDBOX_IDENTITY = dict(
     linear_api_key="sandbox", linear_team_id="team_shoplab", linear_eval_label_id="label_ij_eval", linear_assignee_id="", pagerduty_routing_key="",
     instatus_api_key="sandbox", instatus_page_id="page_shoplab",
     slack_bot_token="xoxb-sandbox", slack_app_token="", slack_oncall_channel="C_ONCALL",
+    github_token="", github_memory_repo="",
 )
 
 
@@ -160,7 +161,7 @@ class Settings(BaseModel):
             slack_oncall_channel=_env("SLACK_ONCALL_CHANNEL", "C_ONCALL"),
             memory_backend=_env("IJ_MEMORY_BACKEND", "local_git"),
             github_token=_env("GITHUB_TOKEN", ""),
-            github_memory_repo=_env("GITHUB_MEMORY_REPO", ""),
+            github_memory_repo=_env("GITHUB_REPO", _env("GITHUB_MEMORY_REPO", "")),
             shoplab_supervisor_url=_env("SHOPLAB_SUPERVISOR_URL", "http://127.0.0.1:8800"),
             shoplab_control_token=_env("SHOPLAB_CONTROL_TOKEN", "dev-control-token"),
             anthropic_api_key=_env("ANTHROPIC_API_KEY", ""),

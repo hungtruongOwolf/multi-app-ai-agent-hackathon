@@ -65,15 +65,34 @@ UNKNOWN: whether the incidents API is available on the free plan — `judge doct
 4. Your member ID (profile → ⋯ → Copy member ID) → `ONCALL_SLACK_USER_IDS` (comma-separated for several people).
 5. `judge bootstrap` creates/joins `#incident-judge-oncall` and writes `SLACK_ONCALL_CHANNEL`.
 
-Approvals are text replies in the incident thread: `approve <hash8>` / `reject <hash8>` — no public URL needed.
+Approvals are buttons on one card per incident (Socket Mode: add an app-level token with `connections:write` →
+`SLACK_APP_TOKEN`); typed `approve <hash8>` / `reject <hash8>` replies still work as a fallback. No public URL needed.
 
-## 5. Claude
+## 5. PagerDuty (escalation, optional)
+
+1. PagerDuty → Services → your service → **Integrations** → Add **Events API V2** → copy the **Integration Key**
+   → `PAGERDUTY_ROUTING_KEY`.
+2. The service's escalation policy needs an on-call user, otherwise events are accepted but no incident is created.
+
+The agent pages when: the fix or public-post approval times out, a fix fails SLO verification, or a SEV1/SEV2 has no
+safe catalog fix. All pages for one incident share `dedup_key = ij-<incident id>` and are resolved when it resolves.
+
+## 6. GitHub (knowledge base mirror, optional)
+
+`GITHUB_TOKEN` (a token with `repo` scope, e.g. `gh auth token`) and `GITHUB_REPO=<owner>/<repo>` (the monorepo).
+Runbook updates become pull requests on `incident-judge/<proposal>` branches touching `knowledge/`; merging on GitHub
+or clicking **Merge** in Slack both work (P12 validation runs first). Raw timelines and recomputed stats are committed
+to `main`. The first start only records a baseline, so the reviewed `knowledge/` is never overwritten by a fresh
+runtime copy. Run `git pull` locally to see what the agent learned.
+
+## 7. Claude
 
 `ANTHROPIC_API_KEY` in `.env`. Models: `IJ_JUDGE_MODEL=claude-sonnet-5` (triage), `IJ_MEMORY_MODEL=claude-opus-5`
 (runbook chooser/writer). `judge doctor` pings both.
 
 ## What stays local
 
-- The runbook wiki is a local git repository (no remote). A GitHub backend is intentionally not enabled.
+- The agent always reads the runbook wiki from its local git repository (fast, already validated); GitHub is the
+  human-facing copy when `GITHUB_TOKEN` is set.
 - The eval harness grades against the sandbox (it needs admin read access to every app's state); real-app runs are for
   the live demo and `judge doctor`.
