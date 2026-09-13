@@ -1,4 +1,5 @@
-"""Local git memory repository (no remote, ever).
+"""Local git memory repository: the copy the agent reads. With GitHub configured it is mirrored to the monorepo's
+`knowledge/` by `judge.memory.github_mirror` (proposals become pull requests); this module never pushes itself.
 
 All writes use git plumbing (hash-object / temporary index / commit-tree / update-ref with CAS),
 so branches can be written without touching the working tree. `main` is the reviewed truth.

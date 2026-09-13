@@ -27,6 +27,11 @@ class GitHubClient:
         resp = await self.http.request(APP, op, method, self._url(path), headers=self._headers, **kw)
         return check(APP, op, resp)
 
+    async def repo_info(self) -> dict:
+        """Repository metadata, including the token's `permissions` (pull, push, admin)."""
+        resp = await self.http.request(APP, "get_repo", "GET", f"{self.base}/repos/{self.repo}", headers=self._headers)
+        return check(APP, "get_repo", resp)
+
     # ------------------------------------------------------------ refs / commits
 
     async def head_sha(self, branch: str = "main") -> str:

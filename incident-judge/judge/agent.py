@@ -122,6 +122,8 @@ class Agent:
             return
         self.store.put_kv(f"{inc.id}:paged:{key}", now().isoformat())
         self.store.put_kv(f"{inc.id}:paged", True)
+        self.store.put_kv(f"{inc.id}:pages", (self.store.get_kv(f"{inc.id}:pages") or []) +
+                          [{"at": now().isoformat(), "reason": reason, "key": key}])
         await self.note(inc, f":pager: *Paged on-call via PagerDuty* — {reason}", key=f"paged:{key}")
         await self.linear_comment(inc, f"**Paged on-call via PagerDuty:** {reason}", scope=f"paged:{key}")
 
@@ -694,6 +696,10 @@ class Agent:
         for d in self.store.decisions(inc.id):
             if d.intent == "instatus.create_incident" and d.allowed:
                 tl.append((d.ts, "Status page incident posted"))
+        for page in self.store.get_kv(f"{inc.id}:pages") or []:
+            tl.append((datetime.fromisoformat(page["at"]), f"Paged on-call via PagerDuty: {page['reason']}"))
+        if self.store.get_kv(f"{inc.id}:paged_resolved"):
+            tl.append((datetime.fromisoformat(self.store.get_kv(f"{inc.id}:paged_resolved")), "PagerDuty incident resolved"))
         for e in self.store.executions():
             if e["incident_id"] == inc.id:
                 verb = {"apply": "Change applied", "rollback": "Change rolled back"}.get(e["kind"], e["kind"])
@@ -710,7 +716,12 @@ class Agent:
             except Exception:
                 pass
         if inc.instatus_incident_id:
-            links.append(f"Status page incident `{inc.instatus_incident_id}`")
+            page_url = os.environ.get("INSTATUS_PAGE_URL") if self.s.backend == "real" else None
+            links.append(f"<{page_url}|Status page>" if page_url else f"Status page incident `{inc.instatus_incident_id}`")
+        if self.store.get_kv(f"{inc.id}:sentry_resolved"):
+            links.append(f"{len(self.store.get_kv(f'{inc.id}:sentry_resolved'))} Sentry issue(s) marked resolved")
+        if self.store.get_kv(f"{inc.id}:pages"):
+            links.append("PagerDuty: paged, " + ("resolved" if self.store.get_kv(f"{inc.id}:paged_resolved") else "still open"))
         memory_line = None
         if inc.runbook_id:
             rb = self.d.repo.get_runbook(inc.runbook_id)
@@ -863,6 +874,19 @@ class Agent:
             return
         proposal = TriageProposal.model_validate(pdata)
         match = self.store.get_kv(f"{inc.id}:match") or {}
+        if not proposal.proposed_action and match.get("runbook_id") and match.get("match_ok") is True:
+            # The runbook matched on live metrics but the judge proposed no action: code proposes the runbook's own
+            # catalog action. The policy engine checks it exactly as if the LLM had proposed it.
+            rb = self.d.repo.get_runbook(match["runbook_id"])
+            fm = rb.frontmatter if rb is not None else None
+            if fm and fm.action and fm.action.name in self.c.actions:
+                from judge.core.models import ActionProposal
+
+                proposal = proposal.model_copy(update={
+                    "runbook_id": rb.id,
+                    "proposed_action": ActionProposal(name=fm.action.name, params=dict(fm.action.params),
+                                                      target_service=inc.primary_service)})
+                self.store.put_kv(f"{inc.id}:proposal", proposal.model_dump(mode="json"))
         if not proposal.proposed_action:
             if match.get("runbook_id") and match.get("match_ok") is not True:
                 rb = self.d.repo.get_runbook(match["runbook_id"])
@@ -1387,12 +1411,15 @@ class Agent:
                                       payload={"issue": issue_id}), rctx).allowed:
                     try:
                         await self.d.sentry.resolve_issue(issue_id)
+                        self.store.put_kv(f"{inc.id}:sentry_resolved", sorted(
+                            {*(self.store.get_kv(f"{inc.id}:sentry_resolved") or []), issue_id}))
                     except Exception as e:
                         log.warning("Sentry resolve %s failed: %r", issue_id, e)
         pd = self.d.extras.get("pagerduty")
         if pd is not None and pd.enabled and self.store.get_kv(f"{inc.id}:paged"):
             try:
                 await pd.resolve(f"ij-{inc.id}")
+                self.store.put_kv(f"{inc.id}:paged_resolved", now().isoformat())
                 await self.note(inc, ":pager: PagerDuty incident resolved.", key="paged-resolved")
             except Exception as e:
                 log.warning("PagerDuty resolve failed: %r", e)
@@ -1463,6 +1490,9 @@ class Agent:
                 pr = await mirror.open_pr(proposal, f"{inc.severity} {', '.join(inc.services)} incident",
                                           "Slack: the incident thread in the on-call channel.")
                 pr_line = [f"Review on GitHub: <{pr['url']}|pull request #{pr['number']}> (merge there or here)"]
+                self.store.put_kv(f"{inc.id}:runbook_pr", {"number": pr["number"], "url": pr["url"],
+                                                           "proposal_id": proposal.id, "title": proposal.title,
+                                                           "at": now().isoformat()})
                 await self.linear_comment(inc, f"**Runbook update proposed:** [GitHub PR #{pr['number']}]({pr['url']})",
                                           scope=f"pr:{proposal.id}")
             except Exception as e:

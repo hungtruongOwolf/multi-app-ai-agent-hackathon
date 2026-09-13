@@ -26,8 +26,9 @@ Nothing talks to GitHub. Tests: `uv run pytest`.
 | Prometheus | `judge/signals/scrape_backend.py` scrapes each service `/metrics` directly and computes named metrics | `PrometheusBackend` later |
 | PromQL `match_conditions` | Structured `MetricCondition` (named metric, op, value, window) | same |
 | Sentry/Linear/Instatus/Slack SaaS | `sandbox/` FastAPI app on :8900 that implements the API subsets we use, same request/response shapes | set `IJ_BACKEND=real` → real base URLs |
-| GitHub memory repo + PRs | Local git repo in `var/memory*`; proposals = branches + proposal records; merge via CLI or Slack approval | GitHub backend later (only when user says upload) |
-| Slack Socket Mode buttons | Text commands `approve <hash8>` / `reject <hash8>` in thread (both modes) + sandbox Slack web UI with buttons that post those commands as the clicking user | slack_bolt Socket Mode optional |
+| GitHub memory repo + PRs | Local git repo in `var/memory*` (the copy the agent reads); proposals = branches + proposal records; merge via CLI or Slack approval | `GITHUB_TOKEN` + `GITHUB_REPO`: mirrored to `knowledge/` on GitHub, proposals are pull requests (§9.8) |
+| Slack Socket Mode buttons | Sandbox Slack web UI with buttons; typed `approve <hash8>` / `reject <hash8>` in thread in both modes | `SLACK_APP_TOKEN`: slack_bolt Socket Mode buttons on one bundled card (§9, `judge/approvals/slack_socket.py`) |
+| PagerDuty escalation | Disabled (no emulator) | `PAGERDUTY_ROUTING_KEY`: Events API v2 trigger/resolve (§9.7) |
 
 ---
 
@@ -269,7 +270,7 @@ class Runbook: frontmatter; sections: dict[str, str]; def to_markdown(); @classm
 # judge/memory/repo.py  (local git via subprocess)
 class MemoryRepo:
     def __init__(self, path: Path, template_dir: Path)
-    def ensure(self) -> None                        # init from memory-template if missing
+    def ensure(self) -> None                        # init from ../knowledge (runbooks only if IJ_KNOWLEDGE_RUNBOOKS=1)
     def read(self, rel: str, ref: str = "main") -> str | None
     def runbooks(self, ref="main") -> list[Runbook]
     def get_runbook(self, runbook_id, ref="main") -> Runbook | None
@@ -310,7 +311,7 @@ class RunbookChooser(Protocol):
 class RunbookWriter(Protocol):
     async def write(self, existing: Runbook | None, raw_timelines: list[str], agents_md: str) -> dict[str, str]  # section -> prose
 ```
-`memory-template/`: `AGENTS.md` (schema & conventions), `wiki/index.md`, `wiki/log.md`, `wiki/runbooks/.gitkeep`,
+`knowledge/` (monorepo root, formerly `memory-template/`): `AGENTS.md` (schema & conventions), `wiki/index.md`, `wiki/log.md`, `wiki/runbooks/`,
 `raw/incidents/.gitkeep`. Provide 2 seed runbook fixtures in `evals/fixtures/memory/` (not in template).
 
 ---
@@ -456,7 +457,7 @@ supervisor proxy routes `/shop/api/...` to the services (no CORS). Failures are 
 inject/clear buttons, live per-service health (error rate, p95, rps from service /metrics), and the change log.
 
 ### 9.3 Service docs in the wiki (owner: diagnosis lane)
-`memory-template/wiki/architecture.md`, `memory-template/wiki/services/<service>.md` (checkout, search, catalog,
+`knowledge/wiki/architecture.md`, `knowledge/wiki/services/<service>.md` (checkout, search, catalog,
 internal-batch): purpose, customer journeys, endpoints, dependencies, config & feature flags (e.g. `payment_v2`),
 connection pool, deploys/versions, metrics and what "normal" looks like, known failure modes and how each shows up,
 safe actions from the action catalog and when each is appropriate/inappropriate. `wiki/index.md` lists docs too.
@@ -505,6 +506,13 @@ intent `pagerduty.trigger`, then triggers with `dedup_key = ij-<incident id>` (a
 into one PagerDuty incident) and records `<id>:paged:<key>` so a reason pages once. Triggers: fix approval timeout,
 public-post approval timeout, failed verification, SEV1/SEV2 diagnosis with no safe fix. `resolve()` of the incident
 resolves the PagerDuty incident. Disabled when `PAGERDUTY_ROUTING_KEY` is empty (always in sandbox/evals).
+State for the console and report: `<id>:pages` (list of `{at, reason, key}`), `<id>:paged_resolved`.
+
+Sentry: on resolve (real backend) each Sentry issue attached to the incident is resolved through intent
+`sentry.resolve_issue` (`<id>:sentry_resolved`), so a recurrence arrives as a regression rather than as an old signal.
+Signals whose last event is older than an earlier resolved incident on the same service are never attached to a newer
+incident, and a runbook fix already in effect (flag already at the target value, pool already at the size, version
+already deployed) is not proposed; the agent diagnoses instead.
 
 ### 9.8 Knowledge base on GitHub (`judge/memory/github_mirror.py`, `judge/connectors/github.py`)
 Real backend only, when `GITHUB_TOKEN` and `GITHUB_REPO` are set. The local memory git repo stays the source of truth
@@ -513,4 +521,5 @@ GitHub `main` (the first call per memory only records a baseline). A wiki propos
 `incident-judge/<proposal id>` (labels `incident-judge`, `knowledge`); state lives in `.git/ij/github.json`.
 Merging: Slack **Merge** → local merge (P12 validation, code-owned fields re-applied) → squash-merge the PR, or close
 it and apply the validated content to `main` if it conflicts. Merged on GitHub → the agent validates and merges
-locally; closed without merge → the proposal is rejected.
+locally; closed without merge → the proposal is rejected. The PR for an incident is kept in `<id>:runbook_pr`; the
+console links it on the incident page and on the wiki's proposal list. `judge doctor` checks repository read + push.

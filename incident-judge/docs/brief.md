@@ -10,7 +10,7 @@ autonomy it has *earned* — and loses on the first failed fix.
 
 | App | Role |
 |---|---|
-| Sentry + SLO metrics | Signals (errors; burn-rate / latency SLOs on live metrics) |
+| Sentry + SLO metrics | Signals (errors; burn-rate / latency SLOs on live metrics); the incident's Sentry issues are resolved with it, so a recurrence is a regression |
 | Linear | Internal record: one issue per incident, progress comments, closed on verified resolution |
 | Instatus | Public status page — the surface where a mistake is irreversible |
 | Slack | The incident thread: evidence, one approval card with buttons (Socket Mode), live verification, discussion, report |

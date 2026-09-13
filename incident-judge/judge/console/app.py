@@ -54,7 +54,7 @@ def create_app(settings: Settings | None = None, config: Config | None = None,
         return JSONResponse({
             "open": [_inc_json(data, i) for i in ov["open"]], "waiting": [i.id for i in ov["waiting"]],
             "total": ov["total"], "mttr_s": ov["mttr_s"], "agent_live": ov["agent_live"],
-            "runbooks": ov["runbooks"], "integrations": ov["integrations"],
+            "runbooks": ov["runbooks"], "integrations": [{**i, "last": h.when(i["last"])} for i in ov["integrations"]],
         }, headers={"Cache-Control": "no-store"})
 
     # ------------------------------------------------------------ incidents
@@ -158,7 +158,10 @@ def _inc_json(data: ConsoleData, inc: Incident) -> dict:
             "created_at": h.when(inc.created_at), "resolved_at": h.when(inc.resolved_at),
             "links": {"slack": data.slack_thread_url(inc), "linear": url, "linear_id": ident,
                       "sentry": [s["url"] for s in data.sentry_links(inc) if s["url"]],
-                      "status_page": data.status_page_url() if inc.public_posted else None}}
+                      "status_page": data.status_page_url() if inc.public_posted else None,
+                      "github_pr": (data.runbook_pr(inc) or {}).get("url")},
+            "pagerduty": {"paged": bool(data.escalation(inc)["pages"]),
+                          "resolved": bool(data.escalation(inc)["resolved_at"])}}
 
 
 def links_bar(data: ConsoleData, inc: Incident) -> str:
@@ -171,6 +174,9 @@ def links_bar(data: ConsoleData, inc: Incident) -> str:
         buttons.append(h.button(data.status_page_url(), "Status page", h.icon("megaphone")))
     if inc.runbook_id:
         buttons.append(h.button(f"/wiki/runbooks/{inc.runbook_id}", "Runbook", h.icon("book")))
+    pr = data.runbook_pr(inc)
+    if pr:
+        buttons.append(h.button(pr["url"], f"GitHub PR #{pr['number']}", h.icon("book")))
     buttons.append(h.button(data.shoplab_url("/ops"), "ShopLab ops", h.icon("wrench")))
     return f'<div class="btn-row">{"".join(b for b in buttons if b)}</div>'
 
@@ -194,9 +200,16 @@ def render_overview(data: ConsoleData, ov: dict) -> str:
     runbooks = (f'<table class="table"><thead><tr><th>Runbook</th><th>Autonomy</th><th class="num">Verified ✓ / ✗</th></tr>'
                 f'</thead><tbody>{rb_rows}</tbody></table>') if rb_rows else h.empty(
         "No runbooks yet", "Runbooks appear after an incident class is seen twice and a human merges the proposal.")
+    def _integ_note(i: dict) -> str:
+        parts = [h.e(i["role"])]
+        if i.get("detail"):
+            parts.append(h.e(i["detail"]))
+        parts.append(f"last used {h.rel(i['last'])}" if i.get("last") else ("" if i["ok"] else "not configured"))
+        return " · ".join(x for x in parts if x)
+
     integ = "".join(
         f'<li class="integ"><span class="dot-{("ok" if i["ok"] else "off")}"></span><strong>{h.e(i["name"])}</strong>'
-        f'<span class="muted">{h.e(i["role"])}</span></li>' for i in ov["integrations"])
+        f'<span class="muted">{_integ_note(i)}</span></li>' for i in ov["integrations"])
     mode = ov["integrations"][0]["mode"] if ov["integrations"] else ""
     return (stats
             + '<div class="grid-2">'
@@ -250,6 +263,20 @@ def render_incident(data: ConsoleData, inc: Incident) -> str:
     ]
     if inc.resolved_at:
         summary_items.append(("Time to resolve", h.duration((inc.resolved_at - inc.created_at).total_seconds())))
+    esc = data.escalation(inc)
+    if esc["pages"]:
+        state = h.badge("resolved", "green") if esc["resolved_at"] else h.badge("open", "red")
+        reasons = "".join(f'<div class="muted small">{h.e(h.clean(p.get("reason")))}</div>' for p in esc["pages"])
+        summary_items.append(("PagerDuty", f"Paged on-call {state}{reasons}"))
+    else:
+        summary_items.append(("PagerDuty", '<span class="muted">not paged</span>'))
+    if data.sentry_resolved(inc):
+        summary_items.append(("Sentry", f"{len(data.sentry_resolved(inc))} issue(s) marked resolved"))
+    pr = data.runbook_pr(inc)
+    if pr:
+        tone = {"open": "purple", "merged": "green", "rejected": "gray"}.get(pr["status"], "gray")
+        summary_items.append(("Runbook update", f'<a href="{h.e(pr["url"])}" target="_blank" rel="noopener">GitHub PR '
+                                                f'#{pr["number"]}</a> {h.badge(pr["status"], tone)}'))
     summary = '<dl class="kv">' + "".join(f"<dt>{h.e(k)}</dt><dd>{v}</dd>" for k, v in summary_items) + "</dl>"
 
     # timeline
@@ -394,9 +421,12 @@ def render_wiki(data: ConsoleData) -> str:
             f'<div class="diff-file">{h.e(d["file"])}</div><pre class="diff">'
             + "".join(f'<span class="{ "add" if ln.startswith("+") and not ln.startswith("+++") else "del" if ln.startswith("-") and not ln.startswith("---") else "ctx"}">{h.e(ln)}</span>\n'
                       for ln in d["lines"][:400]) + "</pre>" for d in item["diffs"])
+        pr = item.get("pr")
+        pr_link = (f' · <a href="{h.e(pr["url"])}" target="_blank" rel="noopener">GitHub PR #{pr["number"]}</a>'
+                   if pr else "")
         props.append(f'<details class="proposal"><summary>{h.badge(p.status, tone)} <strong>{h.e(p.title)}</strong>'
-                     f'<span class="muted small"> · {h.rel(p.created_at)}{" · " + h.e(p.reason) if p.reason else ""}</span>'
-                     f'</summary>{diff}</details>')
+                     f'<span class="muted small"> · {h.rel(p.created_at)}{" · " + h.e(p.reason) if p.reason else ""}'
+                     f'{pr_link}</span></summary>{diff}</details>')
     proposals = "".join(props) or h.empty("No proposals", "After an incident closes the agent proposes what it learned; it lands here for review.")
     return (h.card("Runbooks", runbooks) + '<div class="grid-2">' + h.card("Service docs", docs_html)
             + h.card("Proposed updates", proposals) + "</div>")

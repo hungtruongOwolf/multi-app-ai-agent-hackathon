@@ -82,10 +82,14 @@ typed `approve <hash8>` / `reject <hash8>` replies still work as a fallback.
 
 The agent pages when: the fix or public-post approval times out, a fix fails SLO verification, or a SEV1/SEV2 has no
 safe catalog fix. All pages for one incident share `dedup_key = ij-<incident id>` and are resolved when it resolves.
+`judge bootstrap` checks the key's format; `judge doctor` sends a SEV4 test event and resolves it immediately.
+The console shows who was paged and why on each incident, and PagerDuty in the integrations list.
 
 ## 6. GitHub (knowledge base mirror, optional)
 
-`GITHUB_TOKEN` (a token with `repo` scope, e.g. `gh auth token`) and `GITHUB_REPO=<owner>/<repo>` (the monorepo).
+`GITHUB_TOKEN` (a token with `repo` scope, e.g. `gh auth token`, or a fine-grained token limited to this repository with
+Contents and Pull requests: read and write) and `GITHUB_REPO=<owner>/<repo>` (the monorepo). `judge bootstrap` and
+`judge doctor` check that the token can read the repository and push.
 Runbook updates become pull requests on `incident-judge/<proposal>` branches touching `knowledge/`; merging on GitHub
 or clicking **Merge** in Slack both work (P12 validation runs first). Raw timelines and recomputed stats are committed
 to `main`. The first start only records a baseline, so the reviewed `knowledge/` is never overwritten by a fresh

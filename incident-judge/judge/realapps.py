@@ -86,9 +86,46 @@ async def bootstrap(settings: Settings, config: Config, channel_name: str = DEFA
         await _bootstrap_linear(settings, linear, rep, team_key)
         await _bootstrap_instatus(settings, config, instatus, rep)
         await _bootstrap_slack(settings, slack, rep, channel_name)
+        _bootstrap_pagerduty(settings, rep)
+        await _bootstrap_github(settings, http, rep)
     finally:
         await http.aclose()
     return rep
+
+
+def _bootstrap_pagerduty(s: Settings, rep: Report) -> None:
+    if not s.pagerduty_routing_key:
+        rep.add("pagerduty", "routing key", True, "not configured (optional): set PAGERDUTY_ROUTING_KEY to page on-call")
+        return
+    ok = bool(re.fullmatch(r"[0-9a-zA-Z]{32}", s.pagerduty_routing_key))
+    rep.add("pagerduty", "routing key", ok, "Events API v2 integration key" if ok
+            else "expected a 32-character Events API v2 integration key")
+
+
+async def _bootstrap_github(s: Settings, http, rep: Report) -> None:
+    if not (s.github_token and s.github_memory_repo):
+        rep.add("github", "token + repo", True, "not configured (optional): set GITHUB_TOKEN and GITHUB_REPO=owner/name "
+                                                 "to open runbook updates as pull requests")
+        return
+    await _check_github(s, http, rep)
+
+
+async def _check_github(s: Settings, http, rep: Report) -> bool:
+    from judge.connectors.github import GitHubClient
+
+    gh = GitHubClient(s.github_token, s.github_memory_repo, http)
+    info = await _guard(rep, "github", "read repository", gh.repo_info())
+    if info is None:
+        return False
+    perms = info.get("permissions") or {}
+    rep.add("github", "read repository", True, f"{info.get('full_name')} ({'private' if info.get('private') else 'public'})")
+    ok = rep.add("github", "push + pull requests", bool(perms.get("push")),
+                 "token can push branches and open/merge pull requests" if perms.get("push")
+                 else "token lacks push permission (needs Contents and Pull requests: read and write)")
+    head = await _guard(rep, "github", "default branch", gh.head_sha(info.get("default_branch") or "main"))
+    if head:
+        rep.add("github", "default branch", True, f"{info.get('default_branch') or 'main'} @ {head[:8]}")
+    return ok and head is not None
 
 
 async def _guard(rep: Report, app: str, step: str, coro):
@@ -242,9 +279,31 @@ async def doctor(settings: Settings, config: Config, skip_sentry_ingest: bool = 
         await _doctor_linear(settings, linear, rep, mk)
         await _doctor_instatus(settings, config, instatus, rep, tag)
         await _doctor_slack(settings, slack, rep, mk)
+        await _doctor_pagerduty(settings, http, rep, tag)
+        if settings.backend == "real" and settings.github_token and settings.github_memory_repo:
+            await _check_github(settings, http, rep)
+        else:
+            rep.add("github", "token + repo", True, "not configured (optional; real apps only)")
     finally:
         await http.aclose()
     return rep
+
+
+async def _doctor_pagerduty(s: Settings, http, rep: Report, tag: str) -> None:
+    from judge.connectors.pagerduty import PagerDutyClient
+
+    pd = PagerDutyClient(s, http)
+    if not pd.enabled or s.backend != "real":
+        rep.add("pagerduty", "routing key", True, "not configured (optional; real apps only)")
+        return
+    key = f"ij-doctor-{tag}"
+    sent = await _guard(rep, "pagerduty", "trigger event", pd.trigger(
+        key, "Incident Judge doctor: connectivity check (auto-resolved)", "SEV4", "judge-doctor"))
+    if sent is None:
+        return
+    rep.add("pagerduty", "trigger event", True, f"dedup_key {key}")
+    if await _guard(rep, "pagerduty", "cleanup", pd.resolve(key)) is not None:
+        rep.add("pagerduty", "cleanup", True, "test event resolved")
 
 
 async def _doctor_anthropic(s: Settings, rep: Report) -> None:

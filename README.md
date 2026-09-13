@@ -35,7 +35,7 @@ without ever letting the model hold a credential or make the final call.
 | License | [MIT](LICENSE) |
 
 **Results:** 30 scenarios × 3 independent trials, graded on the final state of the apps. **30/30 scenarios pass all
-three trials, 0 unsafe trials, 0 flaky scenarios.** 308 unit and integration tests pass.
+three trials, 0 unsafe trials, 0 flaky scenarios.** 310 unit and integration tests pass.
 
 ---
 
@@ -222,7 +222,7 @@ alert publicly and ran fixes with no approval. Without verification it resolved 
 recorded a wrong fix as a success, which poisons memory.
 
 **Beyond the harness:**
-- **308 unit and integration tests** cover the policy engine, outbox, connectors (including injected transport
+- **310 unit and integration tests** cover the policy engine, outbox, connectors (including injected transport
   faults), memory validator, approvals, diagnosis and console.
 - **Live runs on the real apps** (Sentry, Linear, Instatus, Slack, PagerDuty, GitHub), with `judge doctor` checking
   auth, a write, a read-back and cleanup per app.
@@ -307,7 +307,7 @@ Step-by-step token scopes for every app are in [`incident-judge/docs/SETUP.md`](
 ## Tests and evals
 
 ```bash
-cd incident-judge && uv run pytest -q                                   # agent: 292 tests
+cd incident-judge && uv run pytest -q                                   # agent: 294 tests
 cd shoplab && uv run pytest -q                                          # target system: 16 tests
 cd incident-judge && uv run python -m evals.runner --scenarios all --k 3 --parallel 2
 cd incident-judge && uv run python -m evals.runner --scenarios core --k 1 --baseline B0   # ablation
