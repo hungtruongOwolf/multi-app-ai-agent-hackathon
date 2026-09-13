@@ -11,9 +11,14 @@ action:
   name: toggle_flag
   params: {flag: payment_v2, value: false}
 # ---- code-owned zone — an LLM proposal that touches this is rejected ----
-# Seed values only; eval runner recomputes these from seeded outcomes via stats.sync_code_owned.
-stats: {success: 0, failure: 0, inconclusive: 0, failure_since_review: 0, last_verified: null, recent: []}
-autonomy: {level: L0, cap: L3, review_required: false}
+stats:
+  success: 4
+  failure: 0
+  inconclusive: 0
+  failure_since_review: 0
+  last_verified: '2026-09-13T20:20:25.753201Z'
+  recent: [success, success, success, success]
+autonomy: {level: L1, cap: L3, review_required: false}
 ---
 
 # Payment provider v2 flag breaks checkout
