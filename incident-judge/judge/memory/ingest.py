@@ -179,10 +179,14 @@ class Ingestor:
             for name in REQUIRED_SECTIONS:
                 if clean[name]:
                     rb.sections[name] = clean[name]
-            sig = rb.frontmatter.signatures
-            sig.fingerprints = sorted(set(sig.fingerprints) | fps)
-            sig.error_types = sorted(set(sig.error_types) | set(facts["error_types"]))
-            sig.services = sorted(set(sig.services) | set(facts["services"]))
+            # Signatures only grow from incidents this runbook's fix verifiably resolved. A look-alike that was found
+            # by fingerprint but rejected by match_conditions must not teach the runbook to match it next time.
+            fixed_by_it = incident.runbook_id == rb.id and any(a.get("result") == "success" for a in facts["actions"])
+            if fixed_by_it:
+                sig = rb.frontmatter.signatures
+                sig.fingerprints = sorted(set(sig.fingerprints) | fps)
+                sig.error_types = sorted(set(sig.error_types) | set(facts["error_types"]))
+                sig.services = sorted(set(sig.services) | set(facts["services"]))
             if rb.to_markdown() == existing.to_markdown():
                 return None
             title = f"Update runbook {rb.id} from {incident.id}"

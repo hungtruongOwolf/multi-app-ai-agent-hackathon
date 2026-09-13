@@ -204,10 +204,14 @@ class Agent:
     # ================================================================ signals -> incidents
 
     def on_signal(self, sig: Signal) -> Incident | None:
-        inc = self.store.open_incident_by_key(sig.fingerprint) or self._open_for_service(sig)
+        inc = self.store.open_incident_by_key(sig.fingerprint)
         if inc is None:
+            # An error that stopped before an earlier incident resolved is that incident's evidence, not a new
+            # symptom; attaching it to a newer incident on the same service would match the old runbook.
             if self._already_resolved(sig):
                 return None
+            inc = self._open_for_service(sig)
+        if inc is None:
             inc = Incident(incident_key=sig.fingerprint, trial_id=self.s.trial_id, environment=sig.environment,
                            services=[sig.service])
             self.store.save_incident(inc)
@@ -582,6 +586,20 @@ class Agent:
             return f"Ticket: <{info['url']}|Linear {info.get('identifier')}>\n"
         return f"Ticket: Linear `{inc.linear_issue_id}`\n" if inc.linear_issue_id else ""
 
+    async def _already_in_effect(self, plan: Plan) -> str | None:
+        try:
+            cfg = await self.d.control.get_config(plan.target_service)
+        except Exception:
+            return None
+        p = plan.params
+        if plan.action == "toggle_flag" and "flag" in p and (cfg.get("flags") or {}).get(p["flag"]) == p.get("value"):
+            return f"`{plan.target_service}` flag `{p['flag']}` is already `{str(p.get('value')).lower()}`"
+        if plan.action == "scale_pool" and p.get("size") is not None and cfg.get("pool_size") == p["size"]:
+            return f"`{plan.target_service}` pool size is already {p['size']}"
+        if plan.action == "rollback_deploy" and p.get("to_version") and cfg.get("app_version") == p["to_version"]:
+            return f"`{plan.target_service}` already runs {p['to_version']}"
+        return None
+
     def _sentry_meta(self, signals: list[Signal]) -> dict[str, dict]:
         return {s.external_id: self.store.get_kv(f"sentry_issue_meta:{s.external_id}") or {}
                 for s in signals if s.source == "sentry" and s.external_id}
@@ -891,6 +909,14 @@ class Agent:
             return
 
         plan = build_plan(inc, proposal.proposed_action, runbook, self.c, level)
+        noop = await self._already_in_effect(plan)
+        if noop:
+            self.store.put_kv(f"{inc.id}:match", {**match, "match_ok": "already_in_effect"})
+            self.store.put_kv(f"{inc.id}:fix_closed", "noop")
+            await self.note(inc, f"Runbook `{runbook.id}` matched, but its fix is already in effect ({noop}), so it cannot be "
+                                 "what fixes this incident. Diagnosing from the service docs, change log and metrics instead.",
+                            key=f"fix-noop:{plan.plan_hash[:8]}")
+            return
         dec = self.decide(Intent(kind="remediation.execute", incident_id=inc.id, payload={"plan": plan.plan_hash}),
                           self.pctx_plan(inc, plan, runbook, match))
         if dec.result == DecisionResult.DENY:
@@ -1354,6 +1380,15 @@ class Agent:
         await self.note(inc, ":large_green_circle: *Status: resolved.* No errors for the quiet window and SLOs are healthy. "
                              "Status page and Linear were updated. *Next:* the agent writes what it learned to the runbook wiki.",
                         key="resolved")
+        if self.s.backend == "real":
+            for issue_id in sorted({s.external_id for s in self.store.signals_for(inc.id)
+                                    if s.source == "sentry" and s.external_id}):
+                if self.decide(Intent(kind="sentry.resolve_issue", incident_id=inc.id,
+                                      payload={"issue": issue_id}), rctx).allowed:
+                    try:
+                        await self.d.sentry.resolve_issue(issue_id)
+                    except Exception as e:
+                        log.warning("Sentry resolve %s failed: %r", issue_id, e)
         pd = self.d.extras.get("pagerduty")
         if pd is not None and pd.enabled and self.store.get_kv(f"{inc.id}:paged"):
             try:
