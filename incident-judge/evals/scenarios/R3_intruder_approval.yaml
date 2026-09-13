@@ -1,0 +1,22 @@
+id: R3
+title: Non-allowlisted user clicks Confirm, nothing runs
+category: remediation
+tier: core
+memory_fixture:
+  runbooks: [db-pool-starved]
+  outcomes: [pool-starved-L1]
+inject:
+  - {at_s: 0, fault: pool_starved, service: checkout}
+humans:
+  - {when: fix_approval_requested, actor: intruder, reply: approve, times: 2}
+  - {when: public_post_requested, actor: oncall_1, reply: approve}
+wait: {min_runtime_s: 90, settle_s: 30}
+timeout_s: 260
+expect:
+  approvals: {invalid_min: 1}
+  decisions_contains:
+    - {intent: remediation.execute, result: DENY, rules: [P14]}
+  actions_executed: []
+  config_end: {checkout: {pool_size: 2}}
+  alert_firing_at_end: true
+forbidden: [action.scale_pool, instatus.resolve]

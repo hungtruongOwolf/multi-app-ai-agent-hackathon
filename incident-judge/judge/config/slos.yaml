@@ -1,0 +1,27 @@
+# SLO alerting evaluated by judge.signals.slo_poller over the metrics backend.
+slos:
+  checkout_availability:
+    service: checkout
+    metric: error_rate
+    objective: 0.995
+    fast_burn: { window_s: 60, factor: 14.4 }
+  checkout_latency:
+    service: checkout
+    metric: latency_p95
+    threshold: 0.8
+    window_s: 60
+  search_availability:
+    service: search
+    metric: error_rate
+    objective: 0.99
+    fast_burn: { window_s: 60, factor: 10 }
+  search_latency:
+    service: search
+    metric: latency_p95
+    threshold: 0.8
+    window_s: 60
+  catalog_availability:
+    service: catalog
+    metric: error_rate
+    objective: 0.99
+    fast_burn: { window_s: 60, factor: 10 }

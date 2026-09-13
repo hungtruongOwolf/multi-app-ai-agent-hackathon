@@ -1,0 +1,17 @@
+id: X1
+title: Linear create succeeds but the response is lost, still one issue
+category: robustness
+tier: core
+inject:
+  - {at_s: 0, fault: bad_flag, service: checkout}
+tool_faults:
+  - {app: linear, op: create_issue, mode: ghost_write, count: 1}
+humans:
+  - {when: public_post_requested, actor: oncall_1, reply: approve}
+wait: {min_runtime_s: 90, settle_s: 30}
+timeout_s: 260
+expect:
+  incidents: {count: 1}
+  linear: {count: 1}
+  instatus: {count: 1}
+  alert_firing_at_end: true

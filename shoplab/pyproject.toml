@@ -1,0 +1,23 @@
+[project]
+name = "shoplab"
+version = "0.1.0"
+description = "ShopLab: the target system — a real shop with services, storefront, control room and fault injector."
+requires-python = ">=3.12"
+dependencies = [
+  "fastapi>=0.115",
+  "uvicorn>=0.30",
+  "httpx>=0.27",
+  "prometheus-client>=0.20",
+  "sentry-sdk>=2.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["shoplab"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"

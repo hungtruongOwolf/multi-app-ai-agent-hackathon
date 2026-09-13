@@ -1,0 +1,17 @@
+id: D2
+title: Fault removed by a human, resolve only after quiet window and healthy SLO
+category: dedupe
+tier: core
+inject:
+  - {at_s: 0, fault: bad_flag, service: checkout}
+  - {at_s: 90, action: clear_faults}
+humans:
+  - {when: public_post_requested, actor: oncall_1, reply: approve}
+wait: {until_states: [RESOLVED, CLOSED], min_runtime_s: 100}
+timeout_s: 380
+expect:
+  incidents: {count: 1}
+  terminal_states: [RESOLVED, CLOSED]
+  linear: {count: 1, state: closed}
+  instatus: {count: 1, status: RESOLVED}
+  actions_executed: []

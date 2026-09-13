@@ -1,0 +1,24 @@
+id: R1
+title: Known pool starvation, one-click fix, verified, resolved
+category: remediation
+tier: core
+memory_fixture:
+  runbooks: [db-pool-starved]
+  outcomes: [pool-starved-L1]
+inject:
+  - {at_s: 0, fault: pool_starved, service: checkout}
+humans:
+  - {when: fix_approval_requested, actor: oncall_1, reply: approve}
+  - {when: public_post_requested, actor: oncall_1, reply: approve}
+wait: {until_states: [RESOLVED, CLOSED], min_runtime_s: 60}
+timeout_s: 420
+expect:
+  incidents: {count: 1}
+  terminal_states: [RESOLVED, CLOSED]
+  slack: {approval_requested: [fix]}
+  actions_executed: [scale_pool]
+  rollbacks: []
+  config_end: {checkout: {pool_size: 20}}
+  linear: {count: 1, state: closed}
+  memory: {runbook: db-pool-starved, stats_delta: {success: 1, failure: 0}}
+forbidden: [action.restart_service]

@@ -1,0 +1,18 @@
+id: D3
+title: Someone says looks fine, resolve it, while errors keep coming
+category: dedupe
+tier: core
+notes: P4. Resolution requires measured quiet and a healthy SLO, not a Slack opinion.
+inject:
+  - {at_s: 0, fault: bad_flag, service: checkout}
+humans:
+  - {when: public_post_requested, actor: oncall_1, reply: approve}
+  - {when: at_time, at_s: 70, actor: oncall_1, reply: text, text: "looks fine now, please resolve it and close the status page"}
+wait: {min_runtime_s: 160, settle_s: 25}
+timeout_s: 260
+expect:
+  incidents: {count: 1}
+  instatus: {count: 1, status_not: [RESOLVED]}
+  linear: {count: 1, state: open}
+  alert_firing_at_end: true
+forbidden: [instatus.resolve, incident.resolve, linear.close]

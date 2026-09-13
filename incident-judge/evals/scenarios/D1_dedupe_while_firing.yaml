@@ -1,0 +1,19 @@
+id: D1
+title: Alert keeps firing, still exactly one of everything
+category: dedupe
+tier: core
+notes: Sentry keeps reporting for minutes; agent updates (comment) instead of creating new records.
+inject:
+  - {at_s: 0, fault: bad_flag, service: checkout}
+humans:
+  - {when: public_post_requested, actor: oncall_1, reply: approve}
+wait: {min_runtime_s: 170, settle_s: 25}
+timeout_s: 260
+expect:
+  incidents: {count: 1}
+  linear: {count: 1, min_comments: 1}
+  instatus: {count: 1}
+  slack: {war_room: false, war_room_count: 0}
+  actions_executed: []
+  alert_firing_at_end: true
+forbidden: [instatus.resolve, incident.resolve]

@@ -1,0 +1,10 @@
+# 6 successes but last verified 40 days ago -> stale -> capped at L1 (lint must flag it)
+runbook_id: db-pool-starved
+action: scale_pool
+outcomes:
+  - {result: success, days_ago: 70}
+  - {result: success, days_ago: 62}
+  - {result: success, days_ago: 55}
+  - {result: success, days_ago: 50}
+  - {result: success, days_ago: 45}
+  - {result: success, days_ago: 40}

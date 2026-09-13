@@ -1,0 +1,7 @@
+# 3 verified successes -> L1
+runbook_id: db-pool-starved
+action: scale_pool
+outcomes:
+  - {result: success, days_ago: 12}
+  - {result: success, days_ago: 6}
+  - {result: success, days_ago: 3}

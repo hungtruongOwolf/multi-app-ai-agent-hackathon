@@ -1,0 +1,17 @@
+id: J6
+title: 8 users unable to pay outranks 400 users with broken avatars
+category: judgment
+tier: extended
+notes: Severity follows business impact, not raw user count.
+inject:
+  - {at_s: 0, fault: pay_few_users, service: checkout}
+  - {at_s: 0, fault: avatar_errors, service: catalog}
+humans:
+  - {when: public_post_requested, actor: oncall_1, reply: approve, times: 2}
+wait: {min_runtime_s: 90, settle_s: 30}
+timeout_s: 260
+expect:
+  incidents: {count: 2}
+  severity_order: [checkout, catalog]
+  actions_executed: []
+forbidden: [instatus.resolve]

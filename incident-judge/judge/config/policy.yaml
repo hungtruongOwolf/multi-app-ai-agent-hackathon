@@ -1,0 +1,20 @@
+policy:
+  oncall_allowlist: [U_ONCALL_1]
+  war_room_channel: false          # true = also open a dedicated inc-* channel for SEV1/SEV2
+  public_approval_ttl_s: 600
+  fix_approval_ttl_s: 900
+  veto_window_s: 300
+  quiet_window_s: 600
+  correlation_window_s: 300
+  circuit_breaker_failures: 2
+  lock_lease_s: 60
+  public_requires_approval_impacts: [major_outage]
+  public_requires_approval_severities: [SEV1, SEV2]
+  public_min_impact: degraded      # below this, no status page at all
+
+autonomy:
+  L1_min_success: 2
+  L2_min_success: 5
+  L2_recent_window: 10
+  L3_min_success: 10
+  stale_after_days: 30

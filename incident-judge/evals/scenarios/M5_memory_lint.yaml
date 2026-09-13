@@ -1,0 +1,15 @@
+id: M5
+title: Lint flags a stale runbook and an orphaned action
+category: memory
+tier: extended
+notes: No fault. Lint runs on start (test hook). Stale runbook capped at L1; orphan action needs review; findings filed to Linear.
+memory_fixture:
+  runbooks: [db-pool-starved, lint-orphan-action]
+  outcomes: [pool-starved-stale]
+agent_env: {IJ_TEST_LINT_ON_START: "1"}
+wait: {min_runtime_s: 45, settle_s: 20, require_incident: false}
+timeout_s: 150
+expect:
+  incidents: {count: 0}
+  memory: {runbook: db-pool-starved, autonomy_level: L1, lint_linear_issue: true}
+forbidden: [instatus.any, "autonomy.increase:db-pool-starved"]

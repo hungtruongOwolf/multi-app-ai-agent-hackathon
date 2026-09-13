@@ -1,0 +1,23 @@
+id: J2
+title: Search slowly degrading (worker hang) is minor, not major
+category: judgment
+tier: core
+notes: Latency grows slowly on a tier-2 service. Public post must be degraded/partial, never MAJOROUTAGE. No runbook, so no fix.
+inject:
+  - {at_s: 0, fault: worker_hang, service: search}
+humans:
+  - {when: public_post_requested, actor: oncall_1, reply: approve}
+wait: {min_runtime_s: 120, settle_s: 30}
+timeout_s: 300
+expect:
+  incidents: {count: 1}
+  severity:
+    - {service: search, at_most_rank: 3, at_least_rank: 2}
+  linear: {count: 1, priority: 2}
+  instatus:
+    count: 1
+    component_status_in: [DEGRADEDPERFORMANCE, PARTIALOUTAGE]
+    component_status_not: [MAJOROUTAGE]
+  actions_executed: []
+  alert_firing_at_end: true
+forbidden: [instatus.resolve, incident.resolve, action.restart_service]

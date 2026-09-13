@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ShopLab — Considered goods for everyday life</title>
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/static/shop.css">
+</head>
+<body>
+  <div class="announce">Free shipping over $75 · 30-day returns · Carbon-neutral delivery</div>
+
+  <header class="topbar">
+    <div class="wrap topbar-inner">
+      <a class="logo" href="#/" aria-label="ShopLab home">
+        <svg viewBox="0 0 32 32" width="28" height="28" aria-hidden="true"><rect width="32" height="32" rx="9" fill="#111827"/><path d="M9 12.5c0-2.2 2-3.5 4.6-3.5 2 0 3.6.7 4.6 2l-1.9 1.6c-.7-.8-1.6-1.2-2.7-1.2-1.2 0-1.9.5-1.9 1.2 0 2 7.6.9 7.6 6 0 2.4-2.1 3.9-5 3.9-2.3 0-4.2-.9-5.3-2.4l2-1.6c.8 1 2 1.6 3.3 1.6 1.3 0 2.1-.6 2.1-1.4C16.4 16.4 9 17.6 9 12.5Z" fill="#fff"/><circle cx="23.5" cy="21.5" r="2.5" fill="#f59e0b"/></svg>
+        <span>ShopLab</span>
+      </a>
+      <form class="search" id="search-form" role="search">
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M10.5 3a7.5 7.5 0 0 1 5.9 12.1l4.2 4.3-1.4 1.4-4.3-4.2A7.5 7.5 0 1 1 10.5 3Zm0 2a5.5 5.5 0 1 0 0 11 5.5 5.5 0 0 0 0-11Z" fill="currentColor"/></svg>
+        <input id="search-input" type="search" placeholder="Search headphones, tents, coffee…" autocomplete="off" aria-label="Search products">
+      </form>
+      <nav class="actions">
+        <button class="icon-btn" id="account-btn" aria-label="Account">
+          <span class="avatar" id="avatar">JD</span>
+        </button>
+        <button class="cart-btn" id="cart-btn" aria-label="Open cart">
+          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M7 18a2 2 0 1 1 0 4 2 2 0 0 1 0-4Zm10 0a2 2 0 1 1 0 4 2 2 0 0 1 0-4ZM1 2h3.3l.9 2H21a1 1 0 0 1 1 1.2l-1.6 7.5A2 2 0 0 1 18.4 14H8.1l-.9 2H19v2H5.6a1 1 0 0 1-.9-1.4L6.4 13 3 4H1V2Z" fill="currentColor"/></svg>
+          <span>Cart</span>
+          <span class="badge" id="cart-count" hidden>0</span>
+        </button>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero wrap">
+      <div class="hero-copy">
+        <p class="eyebrow">Autumn collection</p>
+        <h1>Considered goods<br>for everyday life.</h1>
+        <p class="lede">Headphones that disappear, pans that last a lifetime, and a desk you'll actually want to sit at.</p>
+        <div class="hero-cta">
+          <a href="#shop" class="btn primary">Shop the collection</a>
+          <span class="rating">★★★★★ <b>4.9</b> from 12,480 reviews</span>
+        </div>
+      </div>
+      <div class="hero-art" aria-hidden="true">
+        <div class="tile t1">🎧</div><div class="tile t2">🪴</div><div class="tile t3">☕</div><div class="tile t4">⌚</div>
+      </div>
+    </section>
+
+    <section class="wrap" id="shop">
+      <div class="section-head">
+        <h2 id="grid-title">All products</h2>
+        <div class="chips" id="chips" role="tablist" aria-label="Categories"></div>
+      </div>
+      <div class="notice" id="search-notice" hidden></div>
+      <div class="grid" id="grid" aria-live="polite"></div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <div class="wrap footer-inner">
+      <div><b>ShopLab</b> · a demo shop monitored by Incident Judge</div>
+      <div class="muted">Payments secured · Help center · Returns · Privacy</div>
+    </div>
+  </footer>
+
+  <!-- product dialog -->
+  <div class="scrim" id="product-scrim" hidden></div>
+  <div class="dialog" id="product-dialog" role="dialog" aria-modal="true" aria-labelledby="pd-name" hidden>
+    <button class="close" data-close="product" aria-label="Close">×</button>
+    <div class="pd">
+      <div class="pd-art" id="pd-art"></div>
+      <div class="pd-info">
+        <p class="eyebrow" id="pd-cat"></p>
+        <h3 id="pd-name"></h3>
+        <p class="pd-price" id="pd-price"></p>
+        <p class="muted" id="pd-blurb"></p>
+        <ul class="perks"><li>Ships in 1–2 business days</li><li>Free returns within 30 days</li><li>2-year warranty</li></ul>
+        <div class="pd-state" id="pd-state"></div>
+        <button class="btn primary wide" id="pd-add">Add to cart</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- cart drawer -->
+  <div class="scrim" id="cart-scrim" hidden></div>
+  <aside class="drawer" id="drawer" aria-label="Shopping cart" hidden>
+    <div class="drawer-head">
+      <h3>Your cart</h3>
+      <button class="close" data-close="cart" aria-label="Close cart">×</button>
+    </div>
+    <div class="drawer-body" id="cart-lines"></div>
+    <div class="drawer-foot">
+      <div class="row"><span>Subtotal</span><b id="subtotal">$0.00</b></div>
+      <div class="row muted"><span>Shipping</span><span id="shipping">Free</span></div>
+      <button class="btn primary wide" id="checkout-btn" disabled>Checkout</button>
+    </div>
+  </aside>
+
+  <!-- checkout dialog -->
+  <div class="scrim" id="checkout-scrim" hidden></div>
+  <div class="dialog narrow" id="checkout-dialog" role="dialog" aria-modal="true" aria-labelledby="co-title" hidden>
+    <button class="close" data-close="checkout" aria-label="Close">×</button>
+    <div id="checkout-form-view">
+      <h3 id="co-title">Checkout</h3>
+      <div class="steps"><span class="on">Contact</span><span class="on">Payment</span><span>Confirmation</span></div>
+      <label>Email<input value="jordan.demo@shoplab.test" readonly></label>
+      <div class="two">
+        <label>Name on card<input value="Jordan Doe" readonly></label>
+        <label>Expiry<input value="12 / 29" readonly></label>
+      </div>
+      <label>Card number<input value="4242 4242 4242 4242" readonly></label>
+      <div class="summary" id="co-summary"></div>
+      <div class="inline-error" id="co-error" hidden></div>
+      <button class="btn primary wide" id="pay-btn">Pay</button>
+      <p class="fine">Demo checkout — no real card is charged.</p>
+    </div>
+    <div id="checkout-done-view" class="done" hidden>
+      <div class="check">✓</div>
+      <h3>Order confirmed</h3>
+      <p class="muted">Order <b id="order-id"></b> — a receipt is on its way to jordan.demo@shoplab.test.</p>
+      <button class="btn wide" data-close="checkout">Continue shopping</button>
+    </div>
+  </div>
+
+  <input type="file" id="avatar-file" accept="image/*" hidden>
+  <div class="toasts" id="toasts" aria-live="assertive"></div>
+
+  <script src="/static/shop.js"></script>
+</body>
+</html>

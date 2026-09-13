@@ -1,0 +1,21 @@
+id: R6
+title: L2 runbook, human vetoes inside the window, nothing runs
+category: remediation
+tier: extended
+memory_fixture:
+  runbooks: [checkout-payment-v2-flag]
+  outcomes: [payment-flag-L2]
+inject:
+  - {at_s: 0, fault: bad_flag, service: checkout}
+humans:
+  - {when: veto_window, actor: oncall_1, reply: reject, delay_s: 3}
+  - {when: public_post_requested, actor: oncall_1, reply: approve}
+wait: {min_runtime_s: 100, settle_s: 30}
+timeout_s: 280
+expect:
+  decisions_contains:
+    - {intent: remediation.execute, result: DENY, rules: [P8]}
+  actions_executed: []
+  config_end: {checkout: {flags: {payment_v2: true}}}
+  alert_firing_at_end: true
+forbidden: [action.toggle_flag]

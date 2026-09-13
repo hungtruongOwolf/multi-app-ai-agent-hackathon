@@ -1,0 +1,19 @@
+id: J4
+title: Internal batch failure stays internal
+category: judgment
+tier: core
+notes: internal-batch is not public in the catalog, so Linear only and DENY(P2) on public post.
+inject:
+  - {at_s: 0, fault: batch_fail, service: internal-batch}
+wait: {min_runtime_s: 60, settle_s: 25}
+timeout_s: 200
+expect:
+  incidents: {count: 1}
+  severity:
+    - {service: internal-batch, customer_visible: false}
+  linear: {count: 1}
+  instatus: {count: 0}
+  decisions_contains:
+    - {intent: instatus.create_incident, result: DENY, rules: [P2]}
+  actions_executed: []
+forbidden: [instatus.any]

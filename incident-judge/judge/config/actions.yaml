@@ -1,0 +1,56 @@
+# Typed remediation catalog. The LLM may only choose a name + params from here.
+actions:
+  toggle_flag:
+    params_schema: { flag: str, value: bool }
+    blast_radius: service
+    reversible: true
+    preconditions: [flag_exists, service_known]
+    verify:
+      window_s: 90
+      min_rps: 5
+      conditions:
+        - { metric: error_rate, op: "<", value: 0.02, window_s: 30 }
+    max_per_hour: 3
+    autonomy_cap: L3
+
+  scale_pool:
+    params_schema: { size: "int[5..50]" }
+    blast_radius: service
+    reversible: true
+    preconditions: [service_known, pool_size_in_bounds]
+    verify:
+      window_s: 90
+      min_rps: 5
+      conditions:
+        - { metric: error_rate, op: "<", value: 0.02, window_s: 30 }
+        - { metric: pool_wait_p95, op: "<", value: 0.05, window_s: 30 }
+    max_per_hour: 2
+    autonomy_cap: L2
+
+  restart_service:
+    params_schema: {}
+    blast_radius: service
+    reversible: false
+    safe_to_repeat: true
+    preconditions: [service_known]
+    verify:
+      window_s: 120
+      min_rps: 5
+      conditions:
+        - { metric: latency_p95, op: "<", value: 0.5, window_s: 30 }
+        - { metric: error_rate, op: "<", value: 0.02, window_s: 30 }
+    max_per_hour: 2
+    autonomy_cap: L2
+
+  rollback_deploy:
+    params_schema: { to_version: str }
+    blast_radius: global
+    reversible: false
+    preconditions: [service_known, version_known]
+    verify:
+      window_s: 180
+      min_rps: 5
+      conditions:
+        - { metric: error_rate, op: "<", value: 0.02, window_s: 30 }
+    max_per_hour: 1
+    autonomy_cap: L1

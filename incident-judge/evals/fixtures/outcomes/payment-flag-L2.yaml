@@ -1,0 +1,10 @@
+# 6 verified successes, no failures, reversible action -> L2 (L3 needs 10)
+runbook_id: checkout-payment-v2-flag
+action: toggle_flag
+outcomes:
+  - {result: success, days_ago: 20}
+  - {result: success, days_ago: 15}
+  - {result: success, days_ago: 11}
+  - {result: success, days_ago: 7}
+  - {result: success, days_ago: 4}
+  - {result: success, days_ago: 1}

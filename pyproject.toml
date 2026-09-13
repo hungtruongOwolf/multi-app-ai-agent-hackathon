@@ -1,0 +1,16 @@
+[project]
+name = "multi-app-ai-agent-hackathon"
+version = "0.1.0"
+description = "Incident Judge (on-call agent) + ShopLab (target system) + knowledge (LLM Wiki)."
+requires-python = ">=3.12"
+dependencies = ["incident-judge", "shoplab"]
+
+[tool.uv.sources]
+incident-judge = { workspace = true }
+shoplab = { workspace = true }
+
+[tool.uv.workspace]
+members = ["incident-judge", "shoplab"]
+
+[dependency-groups]
+dev = ["pytest>=8.3", "pytest-asyncio>=0.24"]

@@ -1,0 +1,35 @@
+services:
+  checkout:
+    public: true
+    tier: 1
+    capability: "Checkout & payments"
+    instatus_component_id: "comp_checkout"
+    depends_on: [db, payment-provider]
+    owners: [U_ONCALL_1]
+    routes: ["/pay"]
+    critical_routes: ["/pay"]
+  search:
+    public: true
+    tier: 2
+    capability: "Search"
+    instatus_component_id: "comp_search"
+    depends_on: [db]
+    owners: [U_ONCALL_1]
+    routes: ["/search"]
+    critical_routes: ["/search"]
+  catalog:
+    public: true
+    tier: 2
+    capability: "Product pages"
+    instatus_component_id: "comp_catalog"
+    depends_on: [db, cache]
+    owners: [U_ONCALL_1]
+    routes: ["/products/{id}", "/profile/avatar"]
+    critical_routes: ["/products/{id}"]
+  internal-batch:
+    public: false
+    tier: 3
+    capability: "Internal reporting"
+    depends_on: [db]
+    owners: [U_ONCALL_1]
+    routes: []

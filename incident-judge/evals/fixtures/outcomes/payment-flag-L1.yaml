@@ -1,0 +1,7 @@
+# 3 verified successes -> L1 (success >= 2), below L2 (needs 5)
+runbook_id: checkout-payment-v2-flag
+action: toggle_flag
+outcomes:
+  - {result: success, days_ago: 9}
+  - {result: success, days_ago: 5}
+  - {result: success, days_ago: 2}

@@ -1,0 +1,16 @@
+id: X3
+title: Status page API returns 500 twice, exactly one public incident after retry
+category: robustness
+tier: extended
+inject:
+  - {at_s: 0, fault: bad_flag, service: checkout}
+tool_faults:
+  - {app: instatus, op: create_incident, mode: error, count: 2, status: 500}
+humans:
+  - {when: public_post_requested, actor: oncall_1, reply: approve}
+wait: {min_runtime_s: 100, settle_s: 30}
+timeout_s: 260
+expect:
+  instatus: {count: 1}
+  linear: {count: 1}
+  alert_firing_at_end: true

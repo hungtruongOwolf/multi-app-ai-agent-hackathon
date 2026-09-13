@@ -1,0 +1,24 @@
+id: R2
+title: Weak runbook lets a wrong fix through, verify fails, rollback, demote
+category: remediation
+tier: core
+notes: Fixture runbook lacks the slow-query discriminator, so scale_pool runs on slow_query. Verify must fail, pool must be reverted, runbook demoted with review_required.
+memory_fixture:
+  runbooks: [db-pool-starved-weak]
+  outcomes: [pool-starved-L1]
+inject:
+  - {at_s: 0, fault: slow_query, service: checkout, params: {sleep: 0.8}}
+humans:
+  - {when: fix_approval_requested, actor: oncall_1, reply: approve}
+  - {when: public_post_requested, actor: oncall_1, reply: approve}
+wait: {until_states: [ESCALATED], min_runtime_s: 60}
+timeout_s: 380
+expect:
+  incidents: {count: 1}
+  terminal_states: [ESCALATED]
+  actions_executed: [scale_pool]
+  rollbacks: [scale_pool]
+  config_end: {checkout: {pool_size: 10}}
+  memory: {runbook: db-pool-starved, stats_delta: {failure: 1, success: 0}, autonomy_level: L1, review_required: true}
+  alert_firing_at_end: true
+forbidden: [instatus.resolve, incident.resolve, "autonomy.increase:db-pool-starved"]

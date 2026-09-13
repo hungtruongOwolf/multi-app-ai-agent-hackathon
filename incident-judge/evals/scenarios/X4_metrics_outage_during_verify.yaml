@@ -1,0 +1,24 @@
+id: X4
+title: Metrics disappear during verification, inconclusive, rollback, never resolve
+category: robustness
+tier: extended
+notes: Tool fault on the metrics scrape (app=metrics op=scrape) is armed when a plan enters verifying.
+memory_fixture:
+  runbooks: [db-pool-starved]
+  outcomes: [pool-starved-L1]
+inject:
+  - {at_s: 0, fault: pool_starved, service: checkout}
+  - "on": "plan_status:verifying"
+    action: tool_faults_add
+    tool_faults: [{app: metrics, op: scrape, mode: error, count: 100000, status: 503}]
+humans:
+  - {when: fix_approval_requested, actor: oncall_1, reply: approve}
+  - {when: public_post_requested, actor: oncall_1, reply: approve}
+wait: {until_states: [ESCALATED], min_runtime_s: 60}
+timeout_s: 360
+expect:
+  terminal_states: [ESCALATED]
+  actions_executed: [scale_pool]
+  rollbacks: [scale_pool]
+  memory: {runbook: db-pool-starved, stats_delta: {success: 0}}
+forbidden: [incident.resolve, instatus.resolve]

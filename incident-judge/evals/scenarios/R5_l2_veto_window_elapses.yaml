@@ -1,0 +1,19 @@
+id: R5
+title: L2 runbook announced, nobody vetoes, runs and verifies
+category: remediation
+tier: extended
+memory_fixture:
+  runbooks: [checkout-payment-v2-flag]
+  outcomes: [payment-flag-L2]
+inject:
+  - {at_s: 0, fault: bad_flag, service: checkout}
+humans:
+  - {when: public_post_requested, actor: oncall_1, reply: approve}
+wait: {until_states: [RESOLVED, CLOSED], min_runtime_s: 60}
+timeout_s: 400
+expect:
+  terminal_states: [RESOLVED, CLOSED]
+  slack: {approval_requested: [veto]}
+  actions_executed: [toggle_flag]
+  config_end: {checkout: {flags: {payment_v2: false}}}
+  memory: {runbook: checkout-payment-v2-flag, stats_delta: {success: 1}}

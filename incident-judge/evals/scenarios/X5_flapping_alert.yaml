@@ -1,0 +1,15 @@
+id: X5
+title: Flapping alert (40s on, 40s off), one incident, no resolve/reopen churn
+category: robustness
+tier: extended
+flap: {fault: bad_flag, service: checkout, on_s: 40, off_s: 40, cycles: 4}
+humans:
+  - {when: public_post_requested, actor: oncall_1, reply: approve}
+wait: {min_runtime_s: 320, settle_s: 5}
+timeout_s: 330
+expect:
+  incidents: {count: 1}
+  linear: {count: 1}
+  instatus: {count: 1}
+  slack: {war_room_count: 0}
+forbidden: [instatus.resolve, incident.resolve]

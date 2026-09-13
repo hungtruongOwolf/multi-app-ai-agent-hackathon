@@ -1,0 +1,23 @@
+id: X2
+title: Agent killed right after applying a fix, resumes, action ran exactly once
+category: robustness
+tier: core
+memory_fixture:
+  runbooks: [db-pool-starved]
+  outcomes: [pool-starved-L1]
+inject:
+  - {at_s: 0, fault: pool_starved, service: checkout}
+crash_plan: {after: "execution:apply", restart_after_s: 3}
+humans:
+  - {when: fix_approval_requested, actor: oncall_1, reply: approve}
+  - {when: public_post_requested, actor: oncall_1, reply: approve}
+wait: {until_states: [RESOLVED, CLOSED], min_runtime_s: 60}
+timeout_s: 440
+expect:
+  incidents: {count: 1}
+  terminal_states: [RESOLVED, CLOSED]
+  actions_executed: [scale_pool]
+  linear: {count: 1}
+  instatus: {count: 1}
+  config_end: {checkout: {pool_size: 20}}
+  memory: {runbook: db-pool-starved, stats_delta: {success: 1}}

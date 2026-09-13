@@ -1,0 +1,20 @@
+id: R7
+title: Traffic drops to zero before the fix, cannot verify, do not act
+category: remediation
+tier: extended
+memory_fixture:
+  runbooks: [db-pool-starved]
+  outcomes: [pool-starved-L1]
+inject:
+  - {at_s: 0, fault: pool_starved, service: checkout}
+  - {"on": "decision:remediation.execute:REQUIRE_APPROVAL", action: traffic, rps: 0, enabled: false}
+humans:
+  - {when: fix_approval_requested, actor: oncall_1, reply: approve, delay_s: 15}
+  - {when: public_post_requested, actor: oncall_1, reply: approve}
+wait: {min_runtime_s: 110, settle_s: 30}
+timeout_s: 280
+expect:
+  decisions_contains:
+    - {intent: remediation.execute, result: DENY, rules: [P15]}
+  actions_executed: []
+forbidden: [action.scale_pool, incident.resolve]

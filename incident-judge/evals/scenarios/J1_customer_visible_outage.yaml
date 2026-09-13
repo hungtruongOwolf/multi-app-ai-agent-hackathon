@@ -1,0 +1,21 @@
+id: J1
+title: Payment flag outage on production checkout
+category: judgment
+tier: core
+notes: Tier-1 public service, major outage. Needs Linear P1, the incident thread (no extra channel), status page (after approval).
+inject:
+  - {at_s: 0, fault: bad_flag, service: checkout}
+humans:
+  - {when: public_post_requested, actor: oncall_1, reply: approve}
+wait: {min_runtime_s: 70, settle_s: 25}
+timeout_s: 240
+expect:
+  incidents: {count: 1}
+  severity:
+    - {service: checkout, at_most_rank: 1, customer_visible: true}
+  linear: {count: 1, priority: 1, state: open}
+  slack: {war_room: false, war_room_count: 0, approval_requested: [public_post]}
+  instatus: {count: 1, component_status: MAJOROUTAGE, status_not: [RESOLVED]}
+  actions_executed: []
+  alert_firing_at_end: true
+forbidden: [instatus.resolve, incident.resolve, linear.close]

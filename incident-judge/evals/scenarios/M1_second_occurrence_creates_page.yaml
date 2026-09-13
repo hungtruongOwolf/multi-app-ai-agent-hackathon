@@ -1,0 +1,21 @@
+id: M1
+title: Same incident class twice, runbook page proposed
+category: memory
+tier: core
+notes: Occurrence 1 is fixed by a human (clear faults) and closed, giving raw + candidate log line. Occurrence 2 yields a proposal with a new runbook page.
+inject:
+  - {at_s: 0, fault: bad_flag, service: checkout}
+  - {at_s: 80, action: clear_faults}
+  - {at_s: 230, fault: bad_flag, service: checkout}
+  - {at_s: 310, action: clear_faults}
+humans:
+  - {when: public_post_requested, actor: oncall_1, reply: approve, times: 2}
+wait: {until_states: [CLOSED], min_runtime_s: 330, settle_s: 30}
+timeout_s: 620
+expect:
+  incidents: {count: 2}
+  terminal_states: [CLOSED]
+  linear: {count: 2}
+  instatus: {count: 2}
+  actions_executed: []
+  memory: {proposal_created: true, new_page: true, log_appended: true}

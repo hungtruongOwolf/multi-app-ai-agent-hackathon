@@ -1,0 +1,25 @@
+id: M4
+title: LLM ingest proposal edits code-owned stats, validator rejects
+category: memory
+tier: extended
+notes: Test hook makes the runbook writer bump stats.success in its proposal. P12 must reject; main stats stay consistent with outcomes.
+memory_fixture:
+  runbooks: [checkout-payment-v2-flag]
+  outcomes: [payment-flag-L1]
+agent_env: {IJ_TEST_WRITER: tamper_stats}
+inject:
+  - {at_s: 0, fault: bad_flag, service: checkout}
+humans:
+  - {when: fix_approval_requested, actor: oncall_1, reply: approve}
+  - {when: public_post_requested, actor: oncall_1, reply: approve}
+wait: {until_states: [CLOSED], min_runtime_s: 60, settle_s: 30}
+timeout_s: 420
+expect:
+  terminal_states: [CLOSED]
+  actions_executed: [toggle_flag]
+  memory:
+    runbook: checkout-payment-v2-flag
+    stats_delta: {success: 1}
+    validator_rejected: true
+    proposal_status_not: [merged]
+forbidden: [memory.merge]

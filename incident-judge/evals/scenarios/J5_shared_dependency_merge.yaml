@@ -1,0 +1,20 @@
+id: J5
+title: Slow DB hits checkout and search, one incident
+category: judgment
+tier: extended
+notes: Two different fingerprints, shared dependency (db), same env, inside correlation window, so merge (P13).
+inject:
+  - {at_s: 0, fault: db_slow_shared, service: checkout}
+humans:
+  - {when: public_post_requested, actor: oncall_1, reply: approve, times: 2}
+wait: {min_runtime_s: 90, settle_s: 30}
+timeout_s: 260
+expect:
+  incidents: {count: 1}
+  linear: {count: 1}
+  instatus: {count: 1, components_count: 2}
+  decisions_contains:
+    - {intent: incident.merge, result: ALLOW}
+  actions_executed: []
+  alert_firing_at_end: true
+forbidden: [action.scale_pool, instatus.resolve]
