@@ -102,6 +102,17 @@ def create_app(settings: Settings | None = None, config: Config | None = None,
         return page(request, "Runbooks & docs", "wiki", render_wiki(data),
                     subtitle="The agent's memory: runbooks it earned, service docs it reads, and updates waiting for review.")
 
+    @app.get("/wiki/graph", response_class=HTMLResponse)
+    def wiki_graph(request: Request) -> HTMLResponse:
+        from judge.console import graph as kg
+
+        g = kg.build(data)
+        body = h.card("", f'<div class="kg-wrap">{kg.render_svg(g)}</div>', cls="kg-card")
+        return page(request, "Knowledge graph", "graph", body,
+                    subtitle="The LLM Wiki as a graph: services and their docs, the incidents code wrote down, the "
+                             "runbooks learned from them (autonomy earned from verified fixes) and the pull requests "
+                             "that changed them. Click a node to open it.")
+
     @app.get("/wiki/runbooks/{runbook_id}", response_class=HTMLResponse)
     def runbook(request: Request, runbook_id: str) -> HTMLResponse:
         rb = data.runbook(runbook_id)
@@ -574,7 +585,8 @@ def render_wiki(data: ConsoleData) -> str:
                      f'<span class="muted small"> · {h.rel(p.created_at)}{" · " + h.e(p.reason) if p.reason else ""}'
                      f'{pr_link}</span></summary>{diff}</details>')
     proposals = "".join(props) or h.empty("No proposals", "After an incident closes the agent proposes what it learned; it lands here for review.")
-    return (h.card("Runbooks", runbooks) + '<div class="grid-2">' + h.card("Service docs", docs_html)
+    graph_link = '<a class="small" href="/wiki/graph">Knowledge graph →</a>'
+    return (h.card("Runbooks", runbooks, graph_link) + '<div class="grid-2">' + h.card("Service docs", docs_html)
             + h.card("Proposed updates", proposals) + "</div>")
 
 

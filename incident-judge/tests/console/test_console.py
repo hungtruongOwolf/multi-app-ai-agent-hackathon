@@ -152,3 +152,11 @@ def test_empty_states_without_data(tmp_path, monkeypatch):
     assert "ShopLab is not running" in client.get("/shoplab").text
     assert "No eval runs" in client.get("/evals").text
     assert client.get("/incidents/nope").status_code == 404
+
+
+def test_knowledge_graph_renders(env):
+    client, inc = env
+    r = client.get("/wiki/graph")
+    assert r.status_code == 200 and "<svg" in r.text
+    assert "checkout-payment-v2-flag" in r.text or "Payment" in r.text
+    assert 'href="/wiki/graph"' in client.get("/wiki").text

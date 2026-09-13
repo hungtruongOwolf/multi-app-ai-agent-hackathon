@@ -274,6 +274,7 @@ def line_chart(series: list[float | None], metric: str, target: float | None, op
 
 
 NAV = [("overview", "/", "Overview"), ("incidents", "/incidents", "Incidents"), ("wiki", "/wiki", "Runbooks & docs"),
+       ("graph", "/wiki/graph", "Knowledge graph"),
        ("shoplab", "/shoplab", "ShopLab"), ("evals", "/evals", "Evaluation")]
 
 
