@@ -375,6 +375,7 @@ feel like single sign-on: **connect once, get a working on-call system.**
 
 | | Why it matters |
 |---|---|
+| **Know who owns what.** Map services, runbooks and alerts to teams and people (from `CODEOWNERS`, PagerDuty schedules and the identity provider). The agent pings the owner of the failing service directly, asks *them* to approve fixes to their system, and pulls in the owners of dependencies when an incident spans teams. | The right person sees the right incident first, approvals come from people accountable for the system, and each team's knowledge stays attached to what it owns. |
 | **Learn from history.** Import past incidents from PagerDuty, Linear and Slack, and replay them to measure the agent before it touches anything. | The knowledge base is useful on the first day, not after months of incidents. |
 | **Act on real infrastructure.** Kubernetes rollouts and scaling, LaunchDarkly flags, Argo CD or Vercel rollbacks, metrics from Datadog or Prometheus. | ShopLab's control API becomes the systems teams actually run. |
 | **Propose its own discriminators.** Suggest `match_conditions` for runbooks and backtest them against past incidents before a human merges. | Today these are written by hand, which is the main limit on how many runbooks can earn autonomy. |
