@@ -52,9 +52,12 @@ Severity rubric:
 customer_impact: judge from measured error rate / latency / affected users, not from words in error messages.
   major_outage: most requests to a customer capability fail. partial_outage: a meaningful share fails.
   degraded: slow or a small share fails. none: customers unaffected.
+Thresholds (the SLOs): latency_p95 >= 0.8 s is slow (normal is well under 0.2 s; requests time out at 1.0 s);
+error_rate >= 0.005 is failing. A signal with source=slo means an SLO is burning right now: that is customer
+impact of at least degraded, service-wide (every user of that capability), even if Sentry shows no errors.
 Business criticality matters: a few users unable to pay is worse than many users failing to upload an avatar.
 Metrics named error_rate:<route> / latency_p95:<route> are per critical user journey from the catalog; if those are
-healthy (no errors and not slow), the failure is on a secondary journey and should not be rated above SEV3.
+healthy (error_rate < 0.01 and latency_p95 < 0.8 s), the failure is on a secondary journey and should not be rated above SEV3.
 customer_visible: only production AND a service marked public in the catalog can be customer-visible.
 
 related_incident_id: set only if another open incident very likely shares the same root cause
