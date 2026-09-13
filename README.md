@@ -12,7 +12,7 @@ It decides how severe an incident is, whether customers can see it, what most li
 the team has fixed it before. Then it acts across **Sentry, Linear, Instatus, Slack, PagerDuty and GitHub**,
 without ever letting the model hold a credential or make the final call.
 
-[Watch the 2-minute demo](#demo-video) ·
+[Watch the 2-minute demo](https://youtu.be/vH7voZyG5Fg) ·
 [Reliability brief](incident-judge/docs/brief.md) ·
 [Eval report](incident-judge/docs/results/full-k3/report.md) ·
 [Setup guide](incident-judge/docs/SETUP.md)
@@ -32,7 +32,7 @@ without ever letting the model hold a credential or make the final call.
 | Technical depth | [LLM Wiki knowledge base](#the-knowledge-base-karpathys-llm-wiki-made-safe-to-act-on) · [Engineering highlights](#engineering-highlights) · [Architecture](#architecture) |
 | Setup instructions | [Quick start (no accounts)](#quick-start-5-minutes-no-accounts) · [Connect the real apps](#connect-the-real-apps) |
 | How we tested reliability | [Reliability and evaluation](#reliability-and-evaluation) · [full brief](incident-judge/docs/brief.md) |
-| Two-minute demo | [Demo video](#demo-video) |
+| Two-minute demo | [youtu.be/vH7voZyG5Fg](https://youtu.be/vH7voZyG5Fg) |
 | License | [MIT](LICENSE) |
 
 **Results:** 30 scenarios × 3 independent trials, graded on the final state of the apps. **30/30 scenarios pass all
@@ -263,7 +263,7 @@ recorded a wrong fix as a success, which poisons memory.
 
 ## Demo video
 
-**▶ Two-minute demo: _link will be added before submission_**
+**▶ [Watch the two-minute demo on YouTube](https://youtu.be/vH7voZyG5Fg)**
 
 The script is in [`incident-judge/docs/demo.md`](incident-judge/docs/demo.md): a real checkout outage on the real
 apps, a one-click fix verified on live SLOs, a look-alike incident the agent refuses to "fix", and the runbook update

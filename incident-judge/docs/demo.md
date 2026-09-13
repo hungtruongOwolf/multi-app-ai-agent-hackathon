@@ -1,5 +1,7 @@
 # Two-minute demo
 
+Video: https://youtu.be/vH7voZyG5Fg
+
 The demo runs on the **real apps**: Sentry, Linear, Instatus, Slack, PagerDuty and GitHub. ShopLab breaks for real on
 the local machine.
 
