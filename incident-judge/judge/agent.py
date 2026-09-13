@@ -1351,6 +1351,9 @@ class Agent:
         if dec.result == DecisionResult.DENY:
             await self.note(inc, f"I won't offer the diagnosed fix — {', '.join(dec.rules)}: {dec.explain}",
                             key="diagnosis-deny")
+            if inc.severity and inc.severity.rank <= 2:
+                await self.page(inc, f"the diagnosed fix `{plan.action}` is blocked by policy ({', '.join(dec.rules)}: "
+                                     f"{dec.explain}); a human needs to act", "diagnosis-deny")
             return
         self.store.save_plan(plan, "awaiting_approval")
         self.store.put_kv(f"{inc.id}:fix_pending", {"plan_id": plan.plan_id, "ts": None, "at": now().isoformat(),
