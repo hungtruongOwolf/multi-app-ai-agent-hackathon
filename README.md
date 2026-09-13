@@ -286,6 +286,10 @@ arriving as a pull request.
 | **Sentry**: ShopLab's real errors, the signals the agent judges (and resolves when the incident is fixed)<br><img src="assets/screenshots/sentry.png" alt="Sentry issues feed for shoplab-prod" /> | **PagerDuty**: on-call paged when nobody approved in time, or when there is no safe fix<br><img src="assets/screenshots/pagerduty.png" alt="PagerDuty incidents triggered by Incident Judge" /> |
 | **Status page (Instatus)**: template-only public updates, posted only after approval<br><img src="assets/screenshots/statuspage.png" alt="Public status page with incidents posted by Incident Judge" /> | **Linear**: one ticket per incident, in progress while open, done on verified resolution<br><img src="assets/screenshots/linear.png" alt="Linear issues created and closed by Incident Judge" /> |
 
+**ShopLab control room** (the demo target, not part of the agent): live service health, active faults and the fault library used to break things on purpose
+
+<p align="center"><img src="assets/screenshots/shoplab-control-room.png" alt="ShopLab control room with service health and fault library" width="900" /></p>
+
 ## Quick start (5 minutes, no accounts)
 
 Everything runs locally against API emulators, so no SaaS accounts or API keys are needed.
